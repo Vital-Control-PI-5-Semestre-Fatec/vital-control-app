@@ -125,6 +125,27 @@ function getStringValue(source: Record<string, unknown>, keys: string[]) {
   return '';
 }
 
+function parseMedicamentoCosmos(nome: string) {
+  const dose = nome.match(/(\d+[\.,]?\d*\s?(MG|ML|MCG|UI|G)\b)/i)?.[0]?.trim() ?? '';
+
+  const quantidade = nome.match(/(?:CX|COM|C\/|CT)\s?(\d+)/i)?.[1] ?? '';
+
+  const isComprimido = /COMP|CPR|COMPRIMIDO/i.test(nome);
+  const isCapsule    = /CAP|CAPS|CAPSULA/i.test(nome);
+  const isXarope     = /XPE|XAROPE/i.test(nome);
+  const isInjetavel  = /INJ|INJETAVEL|AMP|AMPOLA/i.test(nome);
+  const isGota       = /GT|GOTA|GOTAS/i.test(nome);
+
+  const unit = isComprimido ? 'TABLET'
+    : isCapsule   ? 'CAPSULE'
+    : isGota      ? 'DROP'
+    : isXarope    ? 'ML'
+    : isInjetavel ? 'ML'
+    : null;
+
+  return { dose, quantidade, unit };
+}
+
 function normalizeCosmosResponse(response: unknown) {
   const root = Array.isArray(response) ? response[0] : response;
 
@@ -268,12 +289,16 @@ export default function MedicationsScreen() {
         return false;
       }
 
+      const parsed = parseMedicamentoCosmos(medicationData.name);
+
       setForm((current) => ({
         ...current,
         barcode,
         name: medicationData.name || current.name,
         brand: medicationData.brand || current.brand,
-        dosageDescription: medicationData.dosageDescription || current.dosageDescription,
+        dosageDescription: medicationData.dosageDescription || parsed.dose || current.dosageDescription,
+        unit: parsed.unit ?? current.unit,
+        currentQuantity: parsed.quantidade || current.currentQuantity,
         imageUrl: medicationData.imageUrl || current.imageUrl,
         registrationSource: 'COSMOS',
       }));
