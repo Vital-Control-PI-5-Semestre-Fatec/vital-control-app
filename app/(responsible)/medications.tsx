@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { Users, Pill } from 'lucide-react-native';
 import { Card } from '../../src/components/ui/Card';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
 import { useAuth } from '../../src/providers/AuthProvider';
@@ -8,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { patientApi } from '../../src/features/patient/api';
 import { operationsApi } from '../../src/features/operations/api';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 function formatUnit(unit?: string) {
   const units: Record<string, string> = {
@@ -23,6 +26,8 @@ function formatUnit(unit?: string) {
 
 export default function ResponsibleMedicationsScreen() {
   const { session } = useAuth();
+  const [medicationSearch, setMedicationSearch] = useState('');
+  const [medicationStatus, setMedicationStatus] = useState('ALL');
 
   const careGroupsQuery = useQuery({
     queryKey: ['responsible', 'care-groups', session?.user.id],
@@ -42,6 +47,33 @@ export default function ResponsibleMedicationsScreen() {
   });
 
   const isLoading = careGroupsQuery.isLoading || medicationsQuery.isLoading;
+  const medicationItems = medicationsQuery.data ?? [];
+  const filteredMedications = medicationItems.filter((medication) => {
+    const isActive = medication.active !== false;
+    const lowStock =
+      medication.stock.lowStockThreshold !== undefined &&
+      medication.stock.currentQuantity <= medication.stock.lowStockThreshold;
+    const matchesStatus =
+      medicationStatus === 'ALL' ||
+      (medicationStatus === 'ACTIVE' && isActive) ||
+      (medicationStatus === 'INACTIVE' && !isActive) ||
+      (medicationStatus === 'LOW_STOCK' && lowStock);
+
+    return matchesStatus && matchesFilterSearch(medicationSearch, [
+      medication.name,
+      medication.dosageDescription,
+      medication.brand,
+      medication.notes,
+      medication.barcode,
+      formatUnit(medication.stock.unit),
+    ]);
+  });
+  const medicationFilterOptions = [
+    { label: 'Todos', value: 'ALL', count: medicationItems.length },
+    { label: 'Ativos', value: 'ACTIVE', count: medicationItems.filter((item) => item.active !== false).length },
+    { label: 'Estoque baixo', value: 'LOW_STOCK', count: medicationItems.filter((item) => item.stock.lowStockThreshold !== undefined && item.stock.currentQuantity <= item.stock.lowStockThreshold).length },
+    { label: 'Inativos', value: 'INACTIVE', count: medicationItems.filter((item) => item.active === false).length },
+  ];
 
   return (
     <Screen title="Medicamentos" subtitle="Visualização somente leitura dos medicamentos do paciente.">
@@ -58,7 +90,19 @@ export default function ResponsibleMedicationsScreen() {
         </Card>
       )}
 
-      {(medicationsQuery.data ?? []).map((med) => {
+      {!!patientId && (
+        <ListFilters
+          onOptionChange={setMedicationStatus}
+          onSearchChange={setMedicationSearch}
+          options={medicationFilterOptions}
+          placeholder="Buscar por nome, dose, marca ou codigo"
+          resultCount={filteredMedications.length}
+          search={medicationSearch}
+          selectedOption={medicationStatus}
+        />
+      )}
+
+      {filteredMedications.map((med) => {
         const isActive = med.active !== false;
         const lowStock =
           med.stock.lowStockThreshold !== undefined &&
@@ -97,7 +141,7 @@ export default function ResponsibleMedicationsScreen() {
         );
       })}
 
-      {!isLoading && medicationsQuery.data?.length === 0 && patientId && (
+      {!isLoading && filteredMedications.length === 0 && patientId && (
         <Card>
           <View className="flex-row items-center gap-4 py-2">
             <Pill color={colors.textMuted} size={28} />

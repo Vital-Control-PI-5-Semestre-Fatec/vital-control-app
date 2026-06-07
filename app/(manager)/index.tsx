@@ -2,6 +2,7 @@ import { Link } from 'expo-router';
 import { CalendarDays, Clock3, UsersRound } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
 import { DateNavigator } from '../../src/components/ui/DateNavigator';
@@ -9,14 +10,41 @@ import { useOperationalVisits } from '../../src/features/operations/hooks';
 import { dateKeyFromDate, patientInitials, visitDateKey, visitStatusLabel, visitStatusTone, visitTimeRange, visitWindow } from '../../src/features/operations/ui';
 import { colors } from '../../src/theme/colors';
 import { cn } from '../../src/utils/cn';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 export default function ManagerAgendaScreen() {
   const visits = useOperationalVisits();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [agendaSearch, setAgendaSearch] = useState('');
+  const [agendaStatus, setAgendaStatus] = useState('ALL');
   const selectedDateKey = dateKeyFromDate(selectedDate);
   const visitsOfDay = [...(visits.data ?? [])]
     .filter((visit) => visitDateKey(visit) === selectedDateKey)
     .sort((left, right) => new Date(visitWindow(left).start).getTime() - new Date(visitWindow(right).start).getTime());
+  const filteredVisitsOfDay = visitsOfDay.filter((visit) => {
+    const needsTriage = visit.status === 'REQUESTED' || visit.status === 'TRIAGED';
+    const matchesStatus =
+      agendaStatus === 'ALL' ||
+      visit.status === agendaStatus ||
+      (agendaStatus === 'TRIAGE' && needsTriage);
+
+    return matchesStatus && matchesFilterSearch(agendaSearch, [
+      patientInitials(visit.patientId),
+      visit.patientId,
+      visit.reason,
+      visitStatusLabel[visit.status],
+      visit.assignedCaregiverId,
+      visit.addressSnapshot.city,
+      visit.addressSnapshot.state,
+    ]);
+  });
+  const agendaFilterOptions = [
+    { label: 'Todos', value: 'ALL', count: visitsOfDay.length },
+    { label: 'Triagem', value: 'TRIAGE', count: visitsOfDay.filter((visit) => visit.status === 'REQUESTED' || visit.status === 'TRIAGED').length },
+    { label: 'Agendados', value: 'SCHEDULED', count: visitsOfDay.filter((visit) => visit.status === 'SCHEDULED').length },
+    { label: 'Em andamento', value: 'IN_PROGRESS', count: visitsOfDay.filter((visit) => visit.status === 'IN_PROGRESS').length },
+    { label: 'Concluidos', value: 'COMPLETED', count: visitsOfDay.filter((visit) => visit.status === 'COMPLETED').length },
+  ];
 
   return (
     <Screen scroll title="Home" subtitle="Agenda operacional por data.">
@@ -26,11 +54,20 @@ export default function ManagerAgendaScreen() {
 
       <View className="flex-row items-center justify-between">
         <Text className="text-lg font-bold text-vc-text-dark">Atendimentos do dia</Text>
-        <Text className="text-xs font-semibold text-vc-text-muted-dark">{visitsOfDay.length} item(ns)</Text>
+        <Text className="text-xs font-semibold text-vc-text-muted-dark">{filteredVisitsOfDay.length} item(ns)</Text>
       </View>
+      <ListFilters
+        onOptionChange={setAgendaStatus}
+        onSearchChange={setAgendaSearch}
+        options={agendaFilterOptions}
+        placeholder="Buscar por paciente, cuidador ou cidade"
+        resultCount={filteredVisitsOfDay.length}
+        search={agendaSearch}
+        selectedOption={agendaStatus}
+      />
       {visits.isFetching && <ActivityIndicator color={colors.secondary} />}
       <View className="gap-3">
-        {visitsOfDay.map((visit) => {
+        {filteredVisitsOfDay.map((visit) => {
           const needsTriage = visit.status === 'REQUESTED' || visit.status === 'TRIAGED';
           const content = (
             <Pressable className="active:opacity-80">
@@ -66,7 +103,7 @@ export default function ManagerAgendaScreen() {
 
           return <View key={visit._id}>{content}</View>;
         })}
-        {!visits.isFetching && !visitsOfDay.length && (
+        {!visits.isFetching && !filteredVisitsOfDay.length && (
           <View className="items-center gap-3 rounded-2xl border border-dashed border-vc-border-dark bg-vc-surface-dark p-6">
             <CalendarDays color={colors.textMuted} size={28} />
             <Text className="text-center text-sm text-vc-text-muted-dark">Nenhum atendimento nesta data.</Text>

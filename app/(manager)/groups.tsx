@@ -5,6 +5,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { ModalSheet } from '../../src/components/ui/ModalSheet';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
@@ -12,6 +13,7 @@ import { EligibleUserPicker } from '../../src/features/operations/components/Eli
 import { useCareGroups, useCreateCareGroup, useEligibleUsers } from '../../src/features/operations/hooks';
 import { patientInitials } from '../../src/features/operations/ui';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 function FormStep({ number, title, description, children }: { number: string; title: string; description: string; children: React.ReactNode }) {
   return (
@@ -42,6 +44,26 @@ export default function ManagerGroupsScreen() {
   const [caregiverIds, setCaregiverIds] = useState<string[]>([]);
   const [responsibleIds, setResponsibleIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string>();
+  const [groupSearch, setGroupSearch] = useState('');
+  const [groupStatus, setGroupStatus] = useState('ALL');
+  const groupItems = groups.data ?? [];
+  const filteredGroups = groupItems.filter((group) => {
+    const matchesStatus = groupStatus === 'ALL' || group.status === groupStatus;
+
+    return matchesStatus && matchesFilterSearch(groupSearch, [
+      group.name,
+      group.status === 'ACTIVE' ? 'Ativo' : 'Inativo',
+      ...group.patientIds,
+      ...group.patientIds.map(patientInitials),
+      ...group.caregiverIds,
+      ...group.responsibleIds,
+    ]);
+  });
+  const groupFilterOptions = [
+    { label: 'Todos', value: 'ALL', count: groupItems.length },
+    { label: 'Ativos', value: 'ACTIVE', count: groupItems.filter((group) => group.status === 'ACTIVE').length },
+    { label: 'Inativos', value: 'INACTIVE', count: groupItems.filter((group) => group.status === 'INACTIVE').length },
+  ];
 
   function save() {
     setFormError(undefined);
@@ -71,7 +93,16 @@ export default function ManagerGroupsScreen() {
   return (
     <Screen action={<Button label="Novo grupo" onPress={() => setModalOpen(true)} variant="secondary" />} title="Grupos de cuidado" subtitle="Organize pacientes e as pessoas autorizadas a acompanhá-los.">
       {groups.isFetching && <ActivityIndicator color={colors.secondary} />}
-      {(groups.data ?? []).map((group) => (
+      <ListFilters
+        onOptionChange={setGroupStatus}
+        onSearchChange={setGroupSearch}
+        options={groupFilterOptions}
+        placeholder="Buscar por grupo, paciente ou pessoa vinculada"
+        resultCount={filteredGroups.length}
+        search={groupSearch}
+        selectedOption={groupStatus}
+      />
+      {filteredGroups.map((group) => (
         <Link asChild href={{ pathname: '/(manager)/group-detail', params: { id: group._id } }} key={group._id}>
           <Card className="gap-3 active:opacity-80">
             <View className="flex-row items-center justify-between">
@@ -100,7 +131,7 @@ export default function ManagerGroupsScreen() {
           </Card>
         </Link>
       ))}
-      {!groups.isFetching && !groups.data?.length && <Card><Text className="text-sm text-vc-text-muted-dark">Nenhum grupo de cuidado cadastrado.</Text></Card>}
+      {!groups.isFetching && !filteredGroups.length && <Card><Text className="text-sm text-vc-text-muted-dark">Nenhum grupo encontrado para os filtros.</Text></Card>}
       <ModalSheet footer={<Button disabled={!name.trim() || !patientIds.length} label="Criar grupo" loading={createGroup.isPending} onPress={save} />} onClose={() => setModalOpen(false)} subtitle="Defina quem recebe cuidado e quem pode acompanhar o grupo." title="Novo grupo" visible={modalOpen}>
         <FormStep description="Use um nome fácil de reconhecer na rotina." number="1" title="Identifique o grupo">
           <Input label="Nome do grupo *" onChangeText={setName} placeholder="Ex.: Cuidados da família Lima" value={name} />

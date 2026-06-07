@@ -1,8 +1,15 @@
-import * as Notifications from 'expo-notifications';
+import { isRunningInExpoGo } from 'expo';
+import { cancelAllScheduledNotificationsAsync } from 'expo-notifications/build/cancelAllScheduledNotificationsAsync';
+import { cancelScheduledNotificationAsync } from 'expo-notifications/build/cancelScheduledNotificationAsync';
+import { getAllScheduledNotificationsAsync } from 'expo-notifications/build/getAllScheduledNotificationsAsync';
+import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications/build/NotificationPermissions';
+import { SchedulableTriggerInputTypes, type NotificationTriggerInput } from 'expo-notifications/build/Notifications.types';
+import { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';
+import { scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
 import { Platform } from 'react-native';
 import type { ApiSchedule } from '../../features/patient/api-types';
 
-Notifications.setNotificationHandler({
+setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
@@ -13,22 +20,24 @@ Notifications.setNotificationHandler({
 });
 
 export async function requestNotificationPermission(): Promise<boolean> {
-  const { status: existing } = await Notifications.getPermissionsAsync();
+  const { status: existing } = await getPermissionsAsync();
 
   if (existing === 'granted') return true;
 
-  const { status } = await Notifications.requestPermissionsAsync();
+  const { status } = await requestPermissionsAsync();
   return status === 'granted';
 }
 
 export async function getPushToken(): Promise<string | null> {
   try {
+    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'android' && isRunningInExpoGo()) return null;
+
     const granted = await requestNotificationPermission();
     if (!granted) return null;
 
-    if (Platform.OS === 'web') return null;
-
-    const token = await Notifications.getExpoPushTokenAsync();
+    const { getExpoPushTokenAsync } = await import('expo-notifications/build/getExpoPushTokenAsync');
+    const token = await getExpoPushTokenAsync();
     return token.data;
   } catch {
     return null;
@@ -43,7 +52,7 @@ function weekdayLabel(day: number): string {
 function buildTriggerForTime(
   time: string,
   recurrence: ApiSchedule['recurrence'],
-): Notifications.NotificationTriggerInput | null {
+): NotificationTriggerInput {
   const [hourStr, minuteStr] = time.split(':');
   const hour = Number(hourStr);
   const minute = Number(minuteStr);
@@ -51,12 +60,12 @@ function buildTriggerForTime(
   if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
 
   if (recurrence.type === 'DAILY') {
-    return { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute };
+    return { type: SchedulableTriggerInputTypes.DAILY, hour, minute };
   }
 
   if (recurrence.type === 'WEEKDAYS' && recurrence.weekdays && recurrence.weekdays.length > 0) {
     return {
-      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      type: SchedulableTriggerInputTypes.WEEKLY,
       weekday: (recurrence.weekdays[0]! % 7) + 1,
       hour,
       minute,
@@ -65,10 +74,10 @@ function buildTriggerForTime(
 
   if (recurrence.type === 'INTERVAL_DAYS') {
     const seconds = (recurrence.intervalDays ?? 1) * 24 * 60 * 60;
-    return { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: true };
+    return { type: SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, repeats: true };
   }
 
-  return { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour, minute };
+  return { type: SchedulableTriggerInputTypes.DAILY, hour, minute };
 }
 
 export async function scheduleAlarmsForSchedule(schedule: ApiSchedule): Promise<void> {
@@ -81,7 +90,7 @@ export async function scheduleAlarmsForSchedule(schedule: ApiSchedule): Promise<
     const trigger = buildTriggerForTime(time, schedule.recurrence);
     if (!trigger) continue;
 
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       identifier: `schedule-${schedule._id}-${time}`,
       content: {
         title: '💊 Hora do medicamento',
@@ -94,16 +103,16 @@ export async function scheduleAlarmsForSchedule(schedule: ApiSchedule): Promise<
 }
 
 export async function cancelAlarmsForSchedule(scheduleId: string): Promise<void> {
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  const scheduled = await getAllScheduledNotificationsAsync();
   for (const notification of scheduled) {
     if (notification.identifier.startsWith(`schedule-${scheduleId}-`)) {
-      await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+      await cancelScheduledNotificationAsync(notification.identifier);
     }
   }
 }
 
 export async function syncAllAlarms(schedules: ApiSchedule[]): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  await cancelAllScheduledNotificationsAsync();
 
   for (const schedule of schedules) {
     if (schedule.active) {

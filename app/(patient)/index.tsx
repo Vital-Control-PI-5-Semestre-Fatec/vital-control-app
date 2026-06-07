@@ -5,6 +5,7 @@ import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { DateNavigator } from '../../src/components/ui/DateNavigator';
 import { Input } from '../../src/components/ui/Input';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { ModalSheet } from '../../src/components/ui/ModalSheet';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
@@ -12,6 +13,7 @@ import { useAdministrations, useMedications, useUpdateAdministrationStatus } fro
 import type { AdministrationStatus, ApiAdministration } from '../../src/features/patient/api-types';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 function dateKey(date: Date) { return date.toISOString().slice(0, 10); }
 
@@ -27,6 +29,8 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [doseSearch, setDoseSearch] = useState('');
+  const [doseStatus, setDoseStatus] = useState('ALL');
   
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<ApiAdministration | null>(null);
@@ -38,6 +42,26 @@ export default function HomeScreen() {
   
   const firstName = session?.user.name.split(' ')[0] ?? 'Paciente';
   const selectedAdministrations = (administrations.data ?? []).filter((item) => item.scheduledFor.slice(0, 10) === dateKey(selectedDate));
+  const filteredAdministrations = selectedAdministrations.filter((item) => {
+    const matchesStatus =
+      doseStatus === 'ALL' ||
+      item.status === doseStatus ||
+      (doseStatus === 'TAKEN' && (item.status === 'TAKEN_ON_TIME' || item.status === 'TAKEN_LATE'));
+
+    return matchesStatus && matchesFilterSearch(doseSearch, [
+      item.medicationSnapshot.name,
+      item.medicationSnapshot.dosageDescription,
+      statusLabel[item.status],
+      item.justification,
+    ]);
+  });
+  const doseFilterOptions = [
+    { label: 'Todas', value: 'ALL', count: selectedAdministrations.length },
+    { label: 'Pendentes', value: 'PENDING', count: selectedAdministrations.filter((item) => item.status === 'PENDING').length },
+    { label: 'Tomadas', value: 'TAKEN', count: selectedAdministrations.filter((item) => item.status === 'TAKEN_ON_TIME' || item.status === 'TAKEN_LATE').length },
+    { label: 'Nao tomadas', value: 'MISSED', count: selectedAdministrations.filter((item) => item.status === 'MISSED').length },
+    { label: 'Ignoradas', value: 'SKIPPED', count: selectedAdministrations.filter((item) => item.status === 'SKIPPED').length },
+  ];
   const lowStock = (medications.data ?? []).filter((item) => item.stock.lowStockThreshold !== undefined && item.stock.currentQuantity <= item.stock.lowStockThreshold);
   
   const notifications = useMemo(() => [
@@ -66,9 +90,18 @@ export default function HomeScreen() {
       
       <View className="flex-row items-center justify-between"><Text className="text-lg font-bold text-vc-text-dark">Doses</Text>{administrations.isFetching && <ActivityIndicator color={colors.secondary} />}</View>
       {administrations.error && <Text className="text-sm text-vc-danger-dark">{administrations.error.message}</Text>}
-      {!administrations.isFetching && !selectedAdministrations.length && <Card><Text className="text-sm text-vc-text-muted-dark">Nenhuma dose encontrada para o periodo.</Text></Card>}
+      <ListFilters
+        onOptionChange={setDoseStatus}
+        onSearchChange={setDoseSearch}
+        options={doseFilterOptions}
+        placeholder="Buscar por medicamento, dose ou nota"
+        resultCount={filteredAdministrations.length}
+        search={doseSearch}
+        selectedOption={doseStatus}
+      />
+      {!administrations.isFetching && !filteredAdministrations.length && <Card><Text className="text-sm text-vc-text-muted-dark">Nenhuma dose encontrada para os filtros.</Text></Card>}
       
-      {selectedAdministrations.map((item) => {
+      {filteredAdministrations.map((item) => {
         const completed = item.status === 'TAKEN_ON_TIME' || item.status === 'TAKEN_LATE';
         const skipped = item.status === 'SKIPPED';
         return (

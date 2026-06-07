@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar, Users } from 'lucide-react-native';
 import { Card } from '../../src/components/ui/Card';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { patientApi } from '../../src/features/patient/api';
 import { colors } from '../../src/theme/colors';
 import type { ApiHomeVisit } from '../../src/features/patient/api-types';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 const STATUS_LABEL: Record<ApiHomeVisit['status'], string> = {
   REQUESTED: 'Solicitado',
@@ -42,12 +45,37 @@ function formatDate(iso?: string) {
 
 export default function ResponsibleVisitsScreen() {
   const { session } = useAuth();
+  const [visitSearch, setVisitSearch] = useState('');
+  const [visitStatus, setVisitStatus] = useState('ALL');
 
   const visitsQuery = useQuery({
     queryKey: ['responsible', 'visits'],
     queryFn: () => patientApi.getVisits(session!.accessToken),
     enabled: !!session,
   });
+  const visitItems = visitsQuery.data ?? [];
+  const filteredVisits = visitItems.filter((visit) => {
+    const window = visit.scheduledWindow ?? visit.requestedWindow;
+    const matchesStatus = visitStatus === 'ALL' || visit.status === visitStatus;
+
+    return matchesStatus && matchesFilterSearch(visitSearch, [
+      visit.reason,
+      visit.patientNotes,
+      STATUS_LABEL[visit.status],
+      visit.addressSnapshot.street,
+      visit.addressSnapshot.city,
+      visit.addressSnapshot.state,
+      new Date(window.start).toLocaleDateString('pt-BR'),
+    ]);
+  });
+  const visitFilterOptions = [
+    { label: 'Todos', value: 'ALL', count: visitItems.length },
+    { label: 'Solicitados', value: 'REQUESTED', count: visitItems.filter((item) => item.status === 'REQUESTED').length },
+    { label: 'Agendados', value: 'SCHEDULED', count: visitItems.filter((item) => item.status === 'SCHEDULED').length },
+    { label: 'Em andamento', value: 'IN_PROGRESS', count: visitItems.filter((item) => item.status === 'IN_PROGRESS').length },
+    { label: 'Concluidos', value: 'COMPLETED', count: visitItems.filter((item) => item.status === 'COMPLETED').length },
+    { label: 'Cancelados', value: 'CANCELLED', count: visitItems.filter((item) => item.status === 'CANCELLED').length },
+  ];
 
   return (
     <Screen title="Atendimentos" subtitle="Visualização somente leitura dos atendimentos.">
@@ -59,7 +87,17 @@ export default function ResponsibleVisitsScreen() {
         </Card>
       )}
 
-      {(visitsQuery.data ?? []).map((visit) => (
+      <ListFilters
+        onOptionChange={setVisitStatus}
+        onSearchChange={setVisitSearch}
+        options={visitFilterOptions}
+        placeholder="Buscar por motivo, endereco, cidade ou status"
+        resultCount={filteredVisits.length}
+        search={visitSearch}
+        selectedOption={visitStatus}
+      />
+
+      {filteredVisits.map((visit) => (
         <Card className="gap-3" key={visit._id}>
           <View className="flex-row items-start justify-between gap-3">
             <View className="h-10 w-10 items-center justify-center rounded-full bg-vc-surface-raised-dark">
@@ -96,7 +134,7 @@ export default function ResponsibleVisitsScreen() {
         </Card>
       ))}
 
-      {!visitsQuery.isLoading && !visitsQuery.data?.length && (
+      {!visitsQuery.isLoading && !filteredVisits.length && (
         <Card>
           <View className="flex-row items-center gap-4 py-2">
             <Calendar color={colors.textMuted} size={28} />

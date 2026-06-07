@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { ModalSheet } from '../../src/components/ui/ModalSheet';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
@@ -21,6 +22,7 @@ import type { ApiStockMovement, StockAdjustmentType } from '../../src/features/p
 import { BarcodeScannerModal } from '../../src/components/rotinas/BarcodeScannerModal';
 import { CodigoBarrasSearch } from '../../src/components/rotinas/CodigoBarrasSearch';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 const STOCK_UNITS = [
   { value: 'TABLET', label: 'Comprimido' },
@@ -205,6 +207,8 @@ export default function MedicationsScreen() {
   const [editingId, setEditingId] = useState<string>();
   const [form, setForm] = useState<MedicationForm>(emptyMedication);
   const [formError, setFormError] = useState<string>();
+  const [medicationSearch, setMedicationSearch] = useState('');
+  const [medicationStatus, setMedicationStatus] = useState('ALL');
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [barcodeError, setBarcodeError] = useState<string>();
@@ -223,6 +227,34 @@ export default function MedicationsScreen() {
   );
 
   const isEditing = !!editingId;
+  const medicationItems = medications.data ?? [];
+  const filteredMedications = medicationItems.filter((medication) => {
+    const extra = medication as ApiMedication & MedicationExtra;
+    const isActive = extra.active !== false;
+    const lowStock =
+      medication.stock.lowStockThreshold !== undefined &&
+      medication.stock.currentQuantity <= medication.stock.lowStockThreshold;
+    const matchesStatus =
+      medicationStatus === 'ALL' ||
+      (medicationStatus === 'ACTIVE' && isActive) ||
+      (medicationStatus === 'INACTIVE' && !isActive) ||
+      (medicationStatus === 'LOW_STOCK' && lowStock);
+
+    return matchesStatus && matchesFilterSearch(medicationSearch, [
+      medication.name,
+      medication.dosageDescription,
+      extra.brand,
+      extra.notes,
+      extra.barcode,
+      formatStockUnit(medication.stock.unit),
+    ]);
+  });
+  const medicationFilterOptions = [
+    { label: 'Todos', value: 'ALL', count: medicationItems.length },
+    { label: 'Ativos', value: 'ACTIVE', count: medicationItems.filter((item) => item.active !== false).length },
+    { label: 'Estoque baixo', value: 'LOW_STOCK', count: medicationItems.filter((item) => item.stock.lowStockThreshold !== undefined && item.stock.currentQuantity <= item.stock.lowStockThreshold).length },
+    { label: 'Inativos', value: 'INACTIVE', count: medicationItems.filter((item) => item.active === false).length },
+  ];
 
   function openCreateForm() {
     setEditingId(undefined);
@@ -424,7 +456,17 @@ export default function MedicationsScreen() {
         <Text className="text-sm text-vc-danger-dark">{medications.error.message}</Text>
       )}
 
-      {(medications.data ?? []).map((medication) => {
+      <ListFilters
+        onOptionChange={setMedicationStatus}
+        onSearchChange={setMedicationSearch}
+        options={medicationFilterOptions}
+        placeholder="Buscar por nome, dose, marca ou codigo"
+        resultCount={filteredMedications.length}
+        search={medicationSearch}
+        selectedOption={medicationStatus}
+      />
+
+      {filteredMedications.map((medication) => {
         const extra = medication as ApiMedication & MedicationExtra;
         const isActive = extra.active !== false;
         const lowStock =
@@ -512,8 +554,8 @@ export default function MedicationsScreen() {
         );
       })}
 
-      {!medications.isFetching && !medications.data?.length && (
-        <Text className="text-sm text-vc-text-muted-dark">Nenhum medicamento cadastrado.</Text>
+      {!medications.isFetching && !filteredMedications.length && (
+        <Text className="text-sm text-vc-text-muted-dark">Nenhum medicamento encontrado para os filtros.</Text>
       )}
 
       <Button label="Cadastrar medicamento" onPress={openCreateForm} />

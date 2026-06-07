@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Clock3, Repeat2, Users } from 'lucide-react-native';
 import { Card } from '../../src/components/ui/Card';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
 import { useAuth } from '../../src/providers/AuthProvider';
@@ -9,6 +11,7 @@ import { patientApi } from '../../src/features/patient/api';
 import { operationsApi } from '../../src/features/operations/api';
 import { colors } from '../../src/theme/colors';
 import type { ApiSchedule } from '../../src/features/patient/api-types';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -32,6 +35,8 @@ function formatDate(iso?: string) {
 
 export default function ResponsibleSchedulesScreen() {
   const { session } = useAuth();
+  const [scheduleSearch, setScheduleSearch] = useState('');
+  const [scheduleFilter, setScheduleFilter] = useState('ALL');
 
   const careGroupsQuery = useQuery({
     queryKey: ['responsible', 'care-groups', session?.user.id],
@@ -57,6 +62,32 @@ export default function ResponsibleSchedulesScreen() {
   });
 
   const isLoading = careGroupsQuery.isLoading || schedulesQuery.isLoading;
+  const scheduleItems = schedulesQuery.data ?? [];
+  const filteredSchedules = scheduleItems.filter((schedule) => {
+    const medication = medicationsQuery.data?.find((m) => m._id === schedule.medicationId);
+    const isActive = schedule.active !== false;
+    const matchesStatus =
+      scheduleFilter === 'ALL' ||
+      (scheduleFilter === 'ACTIVE' && isActive) ||
+      (scheduleFilter === 'INACTIVE' && !isActive) ||
+      schedule.recurrence.type === scheduleFilter;
+
+    return matchesStatus && matchesFilterSearch(scheduleSearch, [
+      schedule.title,
+      medication?.name,
+      schedule.instructions,
+      formatRecurrence(schedule),
+      schedule.times.join(' '),
+    ]);
+  });
+  const scheduleFilterOptions = [
+    { label: 'Todas', value: 'ALL', count: scheduleItems.length },
+    { label: 'Ativas', value: 'ACTIVE', count: scheduleItems.filter((item) => item.active !== false).length },
+    { label: 'Inativas', value: 'INACTIVE', count: scheduleItems.filter((item) => item.active === false).length },
+    { label: 'Diarias', value: 'DAILY', count: scheduleItems.filter((item) => item.recurrence.type === 'DAILY').length },
+    { label: 'Semana', value: 'WEEKDAYS', count: scheduleItems.filter((item) => item.recurrence.type === 'WEEKDAYS').length },
+    { label: 'Intervalo', value: 'INTERVAL_DAYS', count: scheduleItems.filter((item) => item.recurrence.type === 'INTERVAL_DAYS').length },
+  ];
 
   return (
     <Screen title="Rotinas" subtitle="Visualização somente leitura das rotinas do paciente.">
@@ -73,7 +104,19 @@ export default function ResponsibleSchedulesScreen() {
         </Card>
       )}
 
-      {(schedulesQuery.data ?? []).map((schedule) => {
+      {!!patientId && (
+        <ListFilters
+          onOptionChange={setScheduleFilter}
+          onSearchChange={setScheduleSearch}
+          options={scheduleFilterOptions}
+          placeholder="Buscar por rotina, medicamento ou horario"
+          resultCount={filteredSchedules.length}
+          search={scheduleSearch}
+          selectedOption={scheduleFilter}
+        />
+      )}
+
+      {filteredSchedules.map((schedule) => {
         const isActive = schedule.active !== false;
         const medication = medicationsQuery.data?.find((m) => m._id === schedule.medicationId);
 
@@ -125,7 +168,7 @@ export default function ResponsibleSchedulesScreen() {
         );
       })}
 
-      {!isLoading && schedulesQuery.data?.length === 0 && patientId && (
+      {!isLoading && filteredSchedules.length === 0 && patientId && (
         <Card>
           <View className="flex-row items-center gap-4 py-2">
             <Repeat2 color={colors.textMuted} size={28} />

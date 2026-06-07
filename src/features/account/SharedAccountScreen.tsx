@@ -1,16 +1,18 @@
 import { useRouter } from 'expo-router';
 import { Bell, LockKeyhole, LogOut, Smartphone, UserRound } from 'lucide-react-native';
 import { useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Image, Text, useColorScheme, View } from 'react-native';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { ListFilters } from '../../components/ui/ListFilters';
 import { ModalSheet } from '../../components/ui/ModalSheet';
 import { Screen } from '../../components/ui/Screen';
 import { useNotificationDevices } from '../patient/hooks';
 import { useAuth } from '../../providers/AuthProvider';
 import { colors } from '../../theme/colors';
 import type { UserRole } from '../../types/auth';
+import { matchesFilterSearch } from '../../utils/list-filters';
 
 const roleLabels: Record<UserRole, string> = {
   PATIENT: 'Paciente',
@@ -19,8 +21,12 @@ const roleLabels: Record<UserRole, string> = {
   RESPONSIBLE: 'Responsável',
 };
 
+const darkLogo = require('../../../assets/vital control dark logo.jpeg');
+const lightLogo = require('../../../assets/vital control ligth logo.jpeg');
+
 export function SharedAccountScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
   const { session, changePassword, logout, updateUser } = useAuth();
   const devices = useNotificationDevices();
   const [modalOpen, setModalOpen] = useState(false);
@@ -33,6 +39,25 @@ export function SharedAccountScreen() {
   const [error, setError] = useState<string>();
   const [passwordError, setPasswordError] = useState<string>();
   const [passwordSaved, setPasswordSaved] = useState(false);
+  const [deviceSearch, setDeviceSearch] = useState('');
+  const [devicePlatform, setDevicePlatform] = useState('ALL');
+  const deviceItems = devices.data ?? [];
+  const filteredDevices = deviceItems.filter((device) => {
+    const matchesPlatform = devicePlatform === 'ALL' || device.platform === devicePlatform;
+
+    return matchesPlatform && matchesFilterSearch(deviceSearch, [
+      device.deviceName,
+      device.platform,
+      device.pushToken,
+    ]);
+  });
+  const deviceFilterOptions = [
+    { label: 'Todos', value: 'ALL', count: deviceItems.length },
+    { label: 'Android', value: 'ANDROID', count: deviceItems.filter((device) => device.platform === 'ANDROID').length },
+    { label: 'iOS', value: 'IOS', count: deviceItems.filter((device) => device.platform === 'IOS').length },
+    { label: 'Web', value: 'WEB', count: deviceItems.filter((device) => device.platform === 'WEB').length },
+  ];
+  const logo = colorScheme === 'dark' ? darkLogo : lightLogo;
 
   function openEdit() {
     setName(session?.user.name ?? '');
@@ -98,7 +123,7 @@ export function SharedAccountScreen() {
   return (
     <Screen title="Perfil" subtitle="Dados da conta e dispositivos vinculados.">
       <View className="items-center gap-1 py-2">
-        <Image className="h-20 w-20 rounded-2xl" source={require('../../../assets/vital control dark logo.jpeg')} />
+        <Image className="h-20 w-20 rounded-2xl" source={logo} />
         <Text className="text-xl font-bold text-vc-text-dark">{session?.user.name}</Text>
         <Text className="text-sm text-vc-text-muted-dark">{session?.user.email}</Text>
       </View>
@@ -124,13 +149,22 @@ export function SharedAccountScreen() {
           </View>
         </View>
         {devices.error && <Text className="text-xs text-vc-danger-dark">{devices.error.message}</Text>}
-        {(devices.data ?? []).map((device) => (
+        <ListFilters
+          onOptionChange={setDevicePlatform}
+          onSearchChange={setDeviceSearch}
+          options={deviceFilterOptions}
+          placeholder="Buscar por dispositivo ou plataforma"
+          resultCount={filteredDevices.length}
+          search={deviceSearch}
+          selectedOption={devicePlatform}
+        />
+        {filteredDevices.map((device) => (
           <View className="flex-row items-center gap-2 border-t border-vc-border-dark pt-3" key={device._id}>
             <Smartphone color={colors.primary} size={16} />
             <Text className="text-xs text-vc-text-muted-dark">{device.deviceName || device.platform}</Text>
           </View>
         ))}
-        {!devices.isFetching && !devices.data?.length && <Text className="text-xs text-vc-text-muted-dark">Nenhum dispositivo registrado.</Text>}
+        {!devices.isFetching && !filteredDevices.length && <Text className="text-xs text-vc-text-muted-dark">Nenhum dispositivo encontrado para os filtros.</Text>}
       </Card>
 
       <Button label="Sair da conta" onPress={signOut} variant="danger" />

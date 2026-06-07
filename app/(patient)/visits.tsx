@@ -6,15 +6,26 @@ import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { ModalSheet } from '../../src/components/ui/ModalSheet';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
 import { useCreateVisit, usePatientProfile, useVisits } from '../../src/features/patient/hooks';
 import { formatCep, lookupCep } from '../../src/services/api/cep';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 const emptyVisit = { reason: '', date: '', startTime: '', endTime: '', street: '', number: '', neighborhood: '', complement: '', city: '', state: '', zipCode: '', notes: '' };
 type PickerField = 'date' | 'startTime' | 'endTime';
+const VISIT_STATUS_LABEL: Record<string, string> = {
+  REQUESTED: 'Solicitado',
+  TRIAGED: 'Em triagem',
+  SCHEDULED: 'Agendado',
+  IN_PROGRESS: 'Em andamento',
+  COMPLETED: 'Concluido',
+  CANCELLED: 'Cancelado',
+  NO_SHOW: 'Nao compareceu',
+};
 
 function formatDateValue(date: Date) {
   const year = date.getFullYear();
@@ -53,6 +64,31 @@ export default function VisitsScreen() {
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState<string>();
   const [pickerField, setPickerField] = useState<PickerField>();
+  const [visitSearch, setVisitSearch] = useState('');
+  const [visitStatus, setVisitStatus] = useState('ALL');
+  const visitItems = visits.data ?? [];
+  const filteredVisits = visitItems.filter((visit) => {
+    const window = visit.scheduledWindow ?? visit.requestedWindow;
+    const matchesStatus = visitStatus === 'ALL' || visit.status === visitStatus;
+
+    return matchesStatus && matchesFilterSearch(visitSearch, [
+      visit.reason,
+      VISIT_STATUS_LABEL[visit.status],
+      visit.patientNotes,
+      visit.addressSnapshot.street,
+      visit.addressSnapshot.neighborhood,
+      visit.addressSnapshot.city,
+      visit.addressSnapshot.state,
+      new Date(window.start).toLocaleDateString('pt-BR'),
+    ]);
+  });
+  const visitFilterOptions = [
+    { label: 'Todos', value: 'ALL', count: visitItems.length },
+    { label: 'Solicitados', value: 'REQUESTED', count: visitItems.filter((item) => item.status === 'REQUESTED').length },
+    { label: 'Agendados', value: 'SCHEDULED', count: visitItems.filter((item) => item.status === 'SCHEDULED').length },
+    { label: 'Concluidos', value: 'COMPLETED', count: visitItems.filter((item) => item.status === 'COMPLETED').length },
+    { label: 'Cancelados', value: 'CANCELLED', count: visitItems.filter((item) => item.status === 'CANCELLED').length },
+  ];
 
   function openCreate() {
     const address = profile.data?.defaultAddress;
@@ -105,14 +141,24 @@ export default function VisitsScreen() {
     <Screen title="Atendimentos" subtitle="Acompanhe o histórico de visitas.">
       {visits.isFetching && <ActivityIndicator color={colors.secondary} />}
       {visits.error && <Text className="text-sm text-vc-danger-dark">{visits.error.message}</Text>}
+
+      <ListFilters
+        onOptionChange={setVisitStatus}
+        onSearchChange={setVisitSearch}
+        options={visitFilterOptions}
+        placeholder="Buscar por motivo, cidade ou status"
+        resultCount={filteredVisits.length}
+        search={visitSearch}
+        selectedOption={visitStatus}
+      />
       
-      {(visits.data ?? []).map((visit) => {
+      {filteredVisits.map((visit) => {
         const window = visit.scheduledWindow ?? visit.requestedWindow;
         return (
           // O LINK FOI ADICIONADO AQUI!
           <Link asChild href={{ pathname: '/(patient)/visit-detail', params: { id: visit._id } }} key={visit._id}>
             <Card className="gap-2.5 active:opacity-80">
-              <View className="flex-row items-center justify-between"><CalendarDays color={colors.secondary} size={22} /><StatusBadge label={visit.status} tone={visit.status === 'COMPLETED' ? 'success' : visit.status === 'CANCELLED' ? 'danger' : 'info'} /></View>
+              <View className="flex-row items-center justify-between"><CalendarDays color={colors.secondary} size={22} /><StatusBadge label={VISIT_STATUS_LABEL[visit.status] ?? visit.status} tone={visit.status === 'COMPLETED' ? 'success' : visit.status === 'CANCELLED' ? 'danger' : 'info'} /></View>
               <Text className="text-base font-bold text-vc-text-dark">{visit.reason}</Text>
               <Text className="text-sm font-semibold text-vc-primary-dark">{new Date(window.start).toLocaleString('pt-BR')} - {new Date(window.end).toLocaleTimeString('pt-BR')}</Text>
               <View className="flex-row items-center gap-1"><MapPin color={colors.textMuted} size={15} /><Text className="text-xs text-vc-text-muted-dark">{visit.addressSnapshot.street}, {visit.addressSnapshot.number}</Text></View>
@@ -121,7 +167,7 @@ export default function VisitsScreen() {
         );
       })}
       
-      {!visits.isFetching && !visits.data?.length && <Text className="text-sm text-vc-text-muted-dark">Nenhum atendimento solicitado.</Text>}
+      {!visits.isFetching && !filteredVisits.length && <Text className="text-sm text-vc-text-muted-dark">Nenhum atendimento encontrado para os filtros.</Text>}
       <Button label="Solicitar atendimento" onPress={openCreate} />
       
       <ModalSheet footer={<Button label="Enviar solicitação" loading={createVisit.isPending} onPress={save} />} onClose={() => setModalOpen(false)} title="Novo atendimento" visible={modalOpen}>
