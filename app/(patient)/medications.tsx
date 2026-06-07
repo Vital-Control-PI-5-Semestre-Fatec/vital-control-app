@@ -127,6 +127,32 @@ function getStringValue(source: Record<string, unknown>, keys: string[]) {
   return '';
 }
 
+function parseMedicamentoCosmos(nome: string) {
+  const dose = nome.match(/(\d+[\.,]?\d*\s?(MG|ML|MCG|UI|G)\b)/i)?.[0]?.trim() ?? '';
+
+  const quantidade = nome.match(/(?:CX|CAIXA|COM|C\/|CT)\s?(\d+)/i)?.[1] ?? '';
+
+  const isComprimido = /COMP|CPR|COMPRIMIDO|COMPRIMIDOS/i.test(nome);
+  const isCapsule    = /CAP|CAPS|CAPSULA/i.test(nome);
+  const isXarope     = /XPE|XAROPE/i.test(nome);
+  const isInjetavel  = /INJ|INJETAVEL|AMP|AMPOLA/i.test(nome);
+  const isGota       = /GT|GOTA|GOTAS/i.test(nome);
+
+  const unit = isComprimido ? 'TABLET'
+    : isCapsule   ? 'CAPSULE'
+    : isGota      ? 'DROP'
+    : isXarope    ? 'ML'
+    : isInjetavel ? 'ML'
+    : null;
+
+  // Tenta extrair fabricante do nome (palavra em maiúsculas entre dose e CAIXA)
+  // Ex: "DONAREN RETARD 150MG APSEN CAIXA 30 COMPRIMIDOS" → "APSEN"
+  const brandMatch = nome.match(/\d+\s?(?:MG|ML|MCG|UI|G)\s+([A-Z]+)\s+(?:CX|CAIXA|COM)/i);
+  const brandFromName = brandMatch?.[1] ?? '';
+
+  return { dose, quantidade, unit, brandFromName };
+}
+
 function normalizeCosmosResponse(response: unknown) {
   const root = Array.isArray(response) ? response[0] : response;
 
@@ -141,15 +167,18 @@ function normalizeCosmosResponse(response: unknown) {
       : data;
 
   const name = getStringValue(product, [
+    'description',
     'name',
     'nome',
-    'description',
-    'descricao',
     'product_description',
     'descricaoProduto',
   ]);
 
-  const brand = getStringValue(product, ['brand', 'marca', 'manufacturer', 'fabricante']);
+  const brandRaw = product['brand'];
+  const brand =
+    typeof brandRaw === 'object' && brandRaw !== null
+      ? (((brandRaw as Record<string, unknown>)['name'] as string) ?? '')
+      : getStringValue(product, ['brand', 'marca', 'manufacturer', 'fabricante']);
 
   const dosageDescription = getStringValue(product, [
     'dosageDescription',
@@ -172,12 +201,7 @@ function normalizeCosmosResponse(response: unknown) {
     return null;
   }
 
-  return {
-    name,
-    brand,
-    dosageDescription,
-    imageUrl,
-  };
+  return { name, brand, dosageDescription, imageUrl };
 }
 
 function formFromMedication(medication: ApiMedication & MedicationExtra): MedicationForm {
@@ -300,12 +324,16 @@ export default function MedicationsScreen() {
         return false;
       }
 
+      const parsed = parseMedicamentoCosmos(medicationData.name);
+
       setForm((current) => ({
         ...current,
         barcode,
         name: medicationData.name || current.name,
-        brand: medicationData.brand || current.brand,
-        dosageDescription: medicationData.dosageDescription || current.dosageDescription,
+        brand: medicationData.brand || parsed.brandFromName || current.brand,
+        dosageDescription: medicationData.dosageDescription || parsed.dose || current.dosageDescription,
+        unit: parsed.unit ?? current.unit,
+        currentQuantity: parsed.quantidade || current.currentQuantity,
         imageUrl: medicationData.imageUrl || current.imageUrl,
         registrationSource: 'COSMOS',
       }));
