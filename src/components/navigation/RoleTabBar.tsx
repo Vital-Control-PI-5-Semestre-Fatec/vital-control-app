@@ -58,8 +58,9 @@ export function RoleTabBar({ state, descriptors, navigation }: BottomTabBarProps
             >
               <Icon color={focused ? colors.secondary : colors.textMuted} size={21} />
               <Text
+                numberOfLines={1}
                 className={cn(
-                  'text-[11px] font-semibold',
+                  'text-[10px] font-semibold',
                   focused ? 'text-vc-secondary-dark' : 'text-vc-text-muted-dark',
                 )}
               >

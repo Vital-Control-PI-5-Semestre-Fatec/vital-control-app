@@ -8,6 +8,7 @@ import { PatientTabBar } from '../../src/components/navigation/PatientTabBar';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { ModalSheet } from '../../src/components/ui/ModalSheet';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
@@ -24,6 +25,7 @@ import {
   useUpdateSchedule,
 } from '../../src/features/patient/hooks';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 const WEEKDAYS = [
   { label: 'Dom', value: 0 },
@@ -249,8 +251,38 @@ export default function SchedulesScreen() {
   const [barcodeError, setBarcodeError] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [pickerField, setPickerField] = useState<SchedulePickerField>();
+  const [scheduleSearch, setScheduleSearch] = useState('');
+  const [scheduleFilter, setScheduleFilter] = useState('ALL');
 
   const isEditing = !!editingId;
+  const scheduleItems = schedules.data ?? [];
+  const filteredSchedules = scheduleItems.filter((schedule) => {
+    const selectedMedication = medications.data?.find(
+      (medication) => medication._id === schedule.medicationId,
+    );
+    const isActive = schedule.active !== false;
+    const matchesStatus =
+      scheduleFilter === 'ALL' ||
+      (scheduleFilter === 'ACTIVE' && isActive) ||
+      (scheduleFilter === 'INACTIVE' && !isActive) ||
+      schedule.recurrence.type === scheduleFilter;
+
+    return matchesStatus && matchesFilterSearch(scheduleSearch, [
+      schedule.title,
+      selectedMedication?.name,
+      schedule.instructions,
+      formatRecurrence(schedule),
+      schedule.times.join(' '),
+    ]);
+  });
+  const scheduleFilterOptions = [
+    { label: 'Todas', value: 'ALL', count: scheduleItems.length },
+    { label: 'Ativas', value: 'ACTIVE', count: scheduleItems.filter((item) => item.active !== false).length },
+    { label: 'Inativas', value: 'INACTIVE', count: scheduleItems.filter((item) => item.active === false).length },
+    { label: 'Diarias', value: 'DAILY', count: scheduleItems.filter((item) => item.recurrence.type === 'DAILY').length },
+    { label: 'Semana', value: 'WEEKDAYS', count: scheduleItems.filter((item) => item.recurrence.type === 'WEEKDAYS').length },
+    { label: 'Intervalo', value: 'INTERVAL_DAYS', count: scheduleItems.filter((item) => item.recurrence.type === 'INTERVAL_DAYS').length },
+  ];
 
   function openCreateModal() {
     setEditingId(undefined);
@@ -524,7 +556,17 @@ export default function SchedulesScreen() {
         <Text className="text-sm text-vc-danger-dark">{schedules.error.message}</Text>
       )}
 
-      {(schedules.data ?? []).map((schedule: ApiSchedule) => {
+      <ListFilters
+        onOptionChange={setScheduleFilter}
+        onSearchChange={setScheduleSearch}
+        options={scheduleFilterOptions}
+        placeholder="Buscar por rotina, medicamento ou horario"
+        resultCount={filteredSchedules.length}
+        search={scheduleSearch}
+        selectedOption={scheduleFilter}
+      />
+
+      {filteredSchedules.map((schedule: ApiSchedule) => {
         const selectedMedication = medications.data?.find(
           (medication) => medication._id === schedule.medicationId,
         );
@@ -607,8 +649,8 @@ export default function SchedulesScreen() {
         );
       })}
 
-      {!schedules.isFetching && !schedules.data?.length && (
-        <Text className="text-sm text-vc-text-muted-dark">Nenhuma rotina cadastrada.</Text>
+      {!schedules.isFetching && !filteredSchedules.length && (
+        <Text className="text-sm text-vc-text-muted-dark">Nenhuma rotina encontrada para os filtros.</Text>
       )}
 
       <Button label="Adicionar rotina" onPress={openCreateModal} />
@@ -652,6 +694,12 @@ export default function SchedulesScreen() {
         <Text className="text-xs font-bold text-vc-text-muted-dark">
           Selecione o medicamento
         </Text>
+
+        {medications.isLoading && <ActivityIndicator color={colors.secondary} size="small" />}
+        {medications.error && <Text className="text-xs text-vc-danger-dark">Erro ao carregar medicamentos.</Text>}
+        {!medications.isLoading && !medications.error && (medications.data ?? []).filter((m: ApiMedication) => m.active !== false).length === 0 && (
+          <Text className="text-xs text-vc-text-muted-dark">Nenhum medicamento cadastrado. Adicione um na aba Estoque antes de criar uma rotina.</Text>
+        )}
 
         <View className="flex-row flex-wrap gap-2">
           {(medications.data ?? [])

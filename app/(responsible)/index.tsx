@@ -4,15 +4,17 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Card } from '../../src/components/ui/Card';
 import { Input } from '../../src/components/ui/Input';
 import { Button } from '../../src/components/ui/Button';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { ModalSheet } from '../../src/components/ui/ModalSheet';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
 import { useAuth } from '../../src/providers/AuthProvider';
+import { useActivePatient } from '../../src/providers/ResponsibleActivePatientProvider';
 import { operationsApi } from '../../src/features/operations/api';
 import { patientApi } from '../../src/features/patient/api';
-import { patientInitials } from '../../src/features/operations/ui';
 import type { AdministrationStatus, ApiAdministration } from '../../src/features/patient/api-types';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 import { Check, Clock3, User, Users } from 'lucide-react-native';
 
 function dateKey(date: Date) { return date.toISOString().slice(0, 10); }
@@ -30,21 +32,34 @@ export default function ResponsibleHomeScreen() {
   const queryClient = useQueryClient();
   const todayStr = dateKey(new Date());
 
-  const [activePatientId, setActivePatientId] = useState<string | null>(null);
+  const { activePatientId, setActivePatientId } = useActivePatient();
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<ApiAdministration | null>(null);
   const [justification, setJustification] = useState('');
+  const [doseSearch, setDoseSearch] = useState('');
+  const [doseStatus, setDoseStatus] = useState('ALL');
 
   const careGroupsQuery = useQuery({
     queryKey: ['responsible', 'care-groups', session?.user.id],
     queryFn: async () => {
       const allGroups = await operationsApi.getCareGroups(session!.accessToken);
-      return allGroups.filter((g) => g.responsibleIds.includes(session!.user.id));
+      return allGroups;
     },
     enabled: !!session,
   });
 
-  const targetPatientId = activePatientId || careGroupsQuery.data?.[0]?.patientIds[0] || null;
+  const eligiblePatientsQuery = useQuery({
+    queryKey: ['eligible-users', 'PATIENT'],
+    queryFn: () => operationsApi.getEligibleUsers('PATIENT', session!.accessToken),
+    enabled: !!session,
+  });
+
+  const patientNameMap = Object.fromEntries(
+    (eligiblePatientsQuery.data ?? []).map((u) => [u.id, u.name])
+  );
+
+  const patientIds = [...(careGroupsQuery.data?.flatMap((g) => g.patientIds) ?? [])].sort();
+  const targetPatientId = activePatientId || patientIds[0] || null;
 
   const patientAdministrationsQuery = useQuery({
     queryKey: ['responsible', 'patient-administrations', targetPatientId, todayStr],
@@ -61,6 +76,27 @@ export default function ResponsibleHomeScreen() {
       setJustification('');
     },
   });
+
+  const patientAdministrations = [...(patientAdministrationsQuery.data ?? [])].sort(
+    (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime(),
+  );
+  const filteredAdministrations = patientAdministrations.filter((item) => {
+    const matchesStatus = doseStatus === 'ALL' || item.status === doseStatus;
+
+    return matchesStatus && matchesFilterSearch(doseSearch, [
+      item.medicationSnapshot.name,
+      item.medicationSnapshot.dosageDescription,
+      item.justification,
+    ]);
+  });
+  const doseFilterOptions = [
+    { label: 'Todas', value: 'ALL', count: patientAdministrations.length },
+    { label: statusLabel.PENDING, value: 'PENDING', count: patientAdministrations.filter((item) => item.status === 'PENDING').length },
+    { label: statusLabel.TAKEN_ON_TIME, value: 'TAKEN_ON_TIME', count: patientAdministrations.filter((item) => item.status === 'TAKEN_ON_TIME').length },
+    { label: statusLabel.TAKEN_LATE, value: 'TAKEN_LATE', count: patientAdministrations.filter((item) => item.status === 'TAKEN_LATE').length },
+    { label: statusLabel.MISSED, value: 'MISSED', count: patientAdministrations.filter((item) => item.status === 'MISSED').length },
+    { label: statusLabel.SKIPPED, value: 'SKIPPED', count: patientAdministrations.filter((item) => item.status === 'SKIPPED').length },
+  ];
 
   function openActionModal(admin: ApiAdministration) {
     setSelectedAdmin(admin);
@@ -83,7 +119,7 @@ export default function ResponsibleHomeScreen() {
 
         {careGroupsQuery.isLoading && <ActivityIndicator color={colors.secondary} />}
 
-        {!careGroupsQuery.isLoading && !careGroupsQuery.data?.flatMap(g => g.patientIds).length && (
+        {!careGroupsQuery.isLoading && !patientIds.length && (
           <Card>
             <View className="flex-row items-center gap-4 py-2">
               <Users color={colors.textMuted} size={28} />
@@ -95,7 +131,7 @@ export default function ResponsibleHomeScreen() {
         )}
 
         <View className="flex-row flex-wrap gap-2">
-          {careGroupsQuery.data?.flatMap(g => g.patientIds).map((pId) => {
+          {patientIds.map((pId) => {
             const isSelected = targetPatientId === pId;
             return (
               <Pressable
@@ -105,7 +141,7 @@ export default function ResponsibleHomeScreen() {
               >
                 <User color={isSelected ? colors.secondary : colors.textMuted} size={15} />
                 <Text className={`text-xs font-bold ${isSelected ? 'text-vc-secondary-dark' : 'text-vc-text-muted-dark'}`}>
-                  Paciente {patientInitials(pId)}
+                  {patientNameMap[pId] ?? 'Paciente'}
                 </Text>
               </Pressable>
             );
@@ -120,7 +156,19 @@ export default function ResponsibleHomeScreen() {
             {patientAdministrationsQuery.isFetching && <ActivityIndicator color={colors.secondary} size="small" />}
           </View>
 
-          {patientAdministrationsQuery.data?.map((item) => {
+          {!!patientAdministrations.length && (
+            <ListFilters
+              onOptionChange={setDoseStatus}
+              onSearchChange={setDoseSearch}
+              options={doseFilterOptions}
+              placeholder="Buscar por medicamento, dose ou nota"
+              resultCount={filteredAdministrations.length}
+              search={doseSearch}
+              selectedOption={doseStatus}
+            />
+          )}
+
+          {filteredAdministrations.map((item) => {
             const isPending = item.status === 'PENDING';
             const completed = item.status === 'TAKEN_ON_TIME' || item.status === 'TAKEN_LATE';
             return (
@@ -132,7 +180,7 @@ export default function ResponsibleHomeScreen() {
                   <View className="flex-1">
                     <Text className="text-sm font-bold text-vc-text-dark">{item.medicationSnapshot.name}</Text>
                     <Text className="text-xs text-vc-text-muted-dark">
-                      {item.medicationSnapshot.dosageDescription} — {new Date(item.scheduledFor).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {item.medicationSnapshot.dosageDescription} — {new Date(item.scheduledFor).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} às {new Date(item.scheduledFor).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
                   <StatusBadge label={statusLabel[item.status]} tone={completed ? 'success' : item.status === 'MISSED' ? 'danger' : 'info'} />
@@ -144,11 +192,20 @@ export default function ResponsibleHomeScreen() {
             );
           })}
 
-          {!patientAdministrationsQuery.isFetching && !patientAdministrationsQuery.data?.length && (
+          {!patientAdministrationsQuery.isFetching && !patientAdministrations.length && (
             <Card>
               <View className="flex-row items-center gap-3">
                 <Clock3 color={colors.textMuted} size={20} />
                 <Text className="text-sm text-vc-text-muted-dark">Nenhuma dose registrada para hoje.</Text>
+              </View>
+            </Card>
+          )}
+
+          {!patientAdministrationsQuery.isFetching && !!patientAdministrations.length && !filteredAdministrations.length && (
+            <Card>
+              <View className="flex-row items-center gap-3">
+                <Clock3 color={colors.textMuted} size={20} />
+                <Text className="text-sm text-vc-text-muted-dark">Nenhuma dose encontrada com esse filtro.</Text>
               </View>
             </Card>
           )}

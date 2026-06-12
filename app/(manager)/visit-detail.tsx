@@ -1,7 +1,7 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CalendarCheck, Clock3, MapPin, UserCog } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
@@ -51,6 +51,11 @@ export default function ManagerVisitDetailScreen() {
   const visit = useOperationalVisit(id);
   const groups = useCareGroups();
   const caregivers = useEligibleUsers('CAREGIVER');
+  const patients = useEligibleUsers('PATIENT');
+  const patientMap = useMemo(
+    () => Object.fromEntries((patients.data ?? []).map((u) => [u.id, u.name])),
+    [patients.data],
+  );
   const assignVisit = useAssignVisit();
   const cancelVisit = useCancelVisit();
   const [careGroupId, setCareGroupId] = useState('');
@@ -123,7 +128,7 @@ export default function ManagerVisitDetailScreen() {
   }
 
   return (
-    <Screen title="Atribuição" subtitle={`Paciente ${patientInitials(visit.data.patientId)}`}>
+    <Screen title="Atribuição" subtitle={patientMap[visit.data.patientId ?? ''] ?? 'Paciente'}>
       <View className="gap-3 rounded-2xl border border-vc-primary-dark bg-vc-surface-dark p-4">
         <View className="flex-row items-center justify-between">
           <View className="h-11 w-11 items-center justify-center rounded-2xl bg-vc-bg-dark">
@@ -154,8 +159,7 @@ export default function ManagerVisitDetailScreen() {
         </View>
         <View className="rounded-xl border border-vc-border-dark bg-vc-bg-dark p-3">
           <Text className="text-xs text-vc-text-muted-dark">Paciente da solicitação</Text>
-          <Text className="mt-1 text-sm font-bold text-vc-text-dark">Paciente {patientInitials(visit.data.patientId)}</Text>
-          <Text className="mt-1 text-xs text-vc-text-muted-dark">ID: {visit.data.patientId}</Text>
+          <Text className="mt-1 text-sm font-bold text-vc-text-dark">{patientMap[visit.data.patientId ?? ''] ?? 'Paciente'}</Text>
         </View>
         <View className="flex-row items-center gap-2">
           <View className="h-6 w-6 items-center justify-center rounded-full bg-vc-primary-dark">
@@ -175,7 +179,7 @@ export default function ManagerVisitDetailScreen() {
               }}
             >
               <Text className="text-sm font-bold text-vc-text-dark">{group.name}</Text>
-              <Text className="text-xs text-vc-text-muted-dark">{group.patientIds.length} paciente(s): {group.patientIds.map(patientInitials).join(', ')} | {group.caregiverIds.length} cuidador(es)</Text>
+              <Text className="text-xs text-vc-text-muted-dark">{group.patientIds.length} paciente(s): {group.patientIds.map((id) => patientMap[id] ?? '...').join(', ')} | {group.caregiverIds.length} cuidador(es)</Text>
             </Pressable>
           ))}
           {!groups.isFetching && !groupOptions.length && <Text className="text-xs text-vc-danger-dark">Nenhum grupo ativo deste gerente possui o paciente da solicitação.</Text>}

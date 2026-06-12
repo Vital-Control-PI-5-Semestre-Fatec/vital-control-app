@@ -5,13 +5,15 @@ import { Button } from '../../src/components/ui/Button';
 import { Card } from '../../src/components/ui/Card';
 import { DateNavigator } from '../../src/components/ui/DateNavigator';
 import { Input } from '../../src/components/ui/Input';
+import { ListFilters } from '../../src/components/ui/ListFilters';
 import { ModalSheet } from '../../src/components/ui/ModalSheet';
 import { Screen } from '../../src/components/ui/Screen';
 import { StatusBadge } from '../../src/components/ui/StatusBadge';
-import { useAdministrations, useMedications, useUpdateAdministrationStatus } from '../../src/features/patient/hooks';
+import { useAdministrations, useMedications, useSchedules, useUpdateAdministrationStatus } from '../../src/features/patient/hooks';
 import type { AdministrationStatus, ApiAdministration } from '../../src/features/patient/api-types';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { colors } from '../../src/theme/colors';
+import { matchesFilterSearch } from '../../src/utils/list-filters';
 
 function dateKey(date: Date) { return date.toISOString().slice(0, 10); }
 
@@ -27,6 +29,10 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [doseSearch, setDoseSearch] = useState('');
+  const [doseStatus, setDoseStatus] = useState('ALL');
   
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<ApiAdministration | null>(null);
@@ -34,16 +40,61 @@ export default function HomeScreen() {
 
   const administrations = useAdministrations(dateKey(selectedDate));
   const medications = useMedications();
+  const schedules = useSchedules();
   const updateStatus = useUpdateAdministrationStatus();
   
   const firstName = session?.user.name.split(' ')[0] ?? 'Paciente';
   const selectedAdministrations = (administrations.data ?? []).filter((item) => item.scheduledFor.slice(0, 10) === dateKey(selectedDate));
+  const filteredAdministrations = selectedAdministrations.filter((item) => {
+    const matchesStatus =
+      doseStatus === 'ALL' ||
+      item.status === doseStatus ||
+      (doseStatus === 'TAKEN' && (item.status === 'TAKEN_ON_TIME' || item.status === 'TAKEN_LATE'));
+
+    return matchesStatus && matchesFilterSearch(doseSearch, [
+      item.medicationSnapshot.name,
+      item.medicationSnapshot.dosageDescription,
+      statusLabel[item.status],
+      item.justification,
+    ]);
+  });
+  const doseFilterOptions = [
+    { label: 'Todas', value: 'ALL', count: selectedAdministrations.length },
+    { label: 'Pendentes', value: 'PENDING', count: selectedAdministrations.filter((item) => item.status === 'PENDING').length },
+    { label: 'Tomadas', value: 'TAKEN', count: selectedAdministrations.filter((item) => item.status === 'TAKEN_ON_TIME' || item.status === 'TAKEN_LATE').length },
+    { label: 'Nao tomadas', value: 'MISSED', count: selectedAdministrations.filter((item) => item.status === 'MISSED').length },
+    { label: 'Ignoradas', value: 'SKIPPED', count: selectedAdministrations.filter((item) => item.status === 'SKIPPED').length },
+  ];
   const lowStock = (medications.data ?? []).filter((item) => item.stock.lowStockThreshold !== undefined && item.stock.currentQuantity <= item.stock.lowStockThreshold);
   
   const notifications = useMemo(() => [
     `${selectedAdministrations.filter((item) => item.status === 'PENDING').length} dose(s) pendente(s).`,
     lowStock.length ? `${lowStock.length} medicamento(s) com estoque baixo.` : 'Todos os estoques em nivel adequado.',
   ], [lowStock.length, selectedAdministrations]);
+
+  async function handleSyncAlarms() {
+    setSyncing(true);
+    setSyncMessage('');
+    try {
+      const { requestNotificationPermission, syncAllAlarms } = await import('../../src/services/notifications');
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        setSyncMessage('Permissão negada. Ative nas configurações do dispositivo.');
+        return;
+      }
+      if (!schedules.data?.length) {
+        setSyncMessage('Nenhuma rotina encontrada.');
+        return;
+      }
+      await syncAllAlarms(schedules.data);
+      const active = schedules.data.filter((s) => s.active).length;
+      setSyncMessage(`${active} alarme(s) sincronizado(s).`);
+    } catch {
+      setSyncMessage('Erro ao sincronizar alarmes.');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   function openActionModal(admin: ApiAdministration) {
     setSelectedAdmin(admin);
@@ -60,15 +111,32 @@ export default function HomeScreen() {
 
   return (
     <Screen title={`Olá, ${firstName}`} action={<Pressable className="relative rounded-full bg-vc-surface-dark p-2" onPress={() => setNotificationsOpen((current) => !current)}><Bell color={colors.secondary} size={21} /><View className="absolute right-1 top-1 h-2 w-2 rounded-full bg-vc-danger-dark" /></Pressable>}>
-      {notificationsOpen && <Card className="gap-2 border-vc-primary-dark"><Text className="text-base font-bold text-vc-text-dark">Notificações</Text>{notifications.map((item) => <Text className="text-sm text-vc-text-muted-dark" key={item}>- {item}</Text>)}</Card>}
+      {notificationsOpen && (
+        <Card className="gap-2 border-vc-primary-dark">
+          <Text className="text-base font-bold text-vc-text-dark">Notificações</Text>
+          {notifications.map((item) => <Text className="text-sm text-vc-text-muted-dark" key={item}>- {item}</Text>)}
+          <View className="h-px bg-vc-border-dark" />
+          <Button label={syncing ? 'Sincronizando...' : 'Sincronizar alarmes de medicamento'} loading={syncing} onPress={handleSyncAlarms} variant="ghost" />
+          {!!syncMessage && <Text className={`text-xs ${syncMessage.includes('Erro') || syncMessage.includes('negada') || syncMessage.includes('Nenhuma') ? 'text-vc-danger-dark' : 'text-vc-secondary-dark'}`}>{syncMessage}</Text>}
+        </Card>
+      )}
 
       <DateNavigator label="Histórico de doses" onChange={setSelectedDate} selectedDate={selectedDate} />
       
       <View className="flex-row items-center justify-between"><Text className="text-lg font-bold text-vc-text-dark">Doses</Text>{administrations.isFetching && <ActivityIndicator color={colors.secondary} />}</View>
       {administrations.error && <Text className="text-sm text-vc-danger-dark">{administrations.error.message}</Text>}
-      {!administrations.isFetching && !selectedAdministrations.length && <Card><Text className="text-sm text-vc-text-muted-dark">Nenhuma dose encontrada para o periodo.</Text></Card>}
+      <ListFilters
+        onOptionChange={setDoseStatus}
+        onSearchChange={setDoseSearch}
+        options={doseFilterOptions}
+        placeholder="Buscar por medicamento, dose ou nota"
+        resultCount={filteredAdministrations.length}
+        search={doseSearch}
+        selectedOption={doseStatus}
+      />
+      {!administrations.isFetching && !filteredAdministrations.length && <Card><Text className="text-sm text-vc-text-muted-dark">Nenhuma dose encontrada para os filtros.</Text></Card>}
       
-      {selectedAdministrations.map((item) => {
+      {filteredAdministrations.map((item) => {
         const completed = item.status === 'TAKEN_ON_TIME' || item.status === 'TAKEN_LATE';
         const skipped = item.status === 'SKIPPED';
         return (

@@ -80,6 +80,7 @@ export interface ApiPatientProfile {
 
 export interface ApiHomeVisit {
   _id: string;
+  patientId?: string;
   reason: string;
   patientNotes?: string;
   requestedWindow: { start: string; end: string };

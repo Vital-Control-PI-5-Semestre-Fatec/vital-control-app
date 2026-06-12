@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { RoleTabBar } from '../../src/components/navigation/RoleTabBar';
 import { useAuth } from '../../src/providers/AuthProvider';
+import { ResponsibleActivePatientProvider } from '../../src/providers/ResponsibleActivePatientProvider';
 import { colors } from '../../src/theme/colors';
 
 export default function ResponsibleLayout() {
@@ -19,13 +20,16 @@ export default function ResponsibleLayout() {
   if (session.user.role !== 'RESPONSIBLE') return <Redirect href="/" />;
 
   return (
-    <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <RoleTabBar {...props} />}>
-      <Tabs.Screen name="index" options={{ title: 'Início' }} />
-      <Tabs.Screen name="medications" options={{ title: 'Medicamentos' }} />
-      <Tabs.Screen name="schedules" options={{ title: 'Rotinas' }} />
-      <Tabs.Screen name="visits" options={{ title: 'Atendimentos' }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Notificações' }} />
-      <Tabs.Screen name="account" options={{ title: 'Perfil' }} />
-    </Tabs>
+    <ResponsibleActivePatientProvider>
+      <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <RoleTabBar {...props} />}>
+        <Tabs.Screen name="index" options={{ title: 'Início' }} />
+        <Tabs.Screen name="medications" options={{ title: 'Remédios' }} />
+        <Tabs.Screen name="stock" options={{ title: 'Estoque' }} />
+        <Tabs.Screen name="schedules" options={{ title: 'Rotinas' }} />
+        <Tabs.Screen name="visits" options={{ title: 'Agenda' }} />
+        <Tabs.Screen name="notifications" options={{ title: 'Alertas' }} />
+        <Tabs.Screen name="account" options={{ title: 'Perfil' }} />
+      </Tabs>
+    </ResponsibleActivePatientProvider>
   );
 }
