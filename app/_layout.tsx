@@ -1,19 +1,22 @@
 import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { LogBox } from 'react-native';
+import { useColorScheme } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../src/providers/AuthProvider';
 import { QueryProvider } from '../src/providers/QueryProvider';
 
-LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
-
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
+
   return (
-    <QueryProvider>
-      <AuthProvider>
-        <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false }} />
-      </AuthProvider>
-    </QueryProvider>
+    <SafeAreaProvider>
+      <QueryProvider>
+        <AuthProvider>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <Stack screenOptions={{ headerShown: false }} />
+        </AuthProvider>
+      </QueryProvider>
+    </SafeAreaProvider>
   );
 }

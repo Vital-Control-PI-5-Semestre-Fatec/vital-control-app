@@ -2,7 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, Redirect, useRouter } from 'expo-router';
 import { useState, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Image, KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
+import { Image, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { z } from 'zod';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
@@ -15,12 +16,17 @@ const schema = z.object({
   password: z.string().min(8, 'A senha deve ter pelo menos 8 caracteres.'),
 });
 
+const darkLogo = require('../../assets/vital control dark logo.jpeg');
+const lightLogo = require('../../assets/vital control ligth logo.jpeg');
+
 type LoginForm = z.infer<typeof schema>;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
   const { session, login } = useAuth();
   const [error, setError] = useState<string>();
+  const logo = colorScheme === 'dark' ? darkLogo : lightLogo;
   
   const passwordInputRef = useRef<TextInput>(null);
 
@@ -44,10 +50,17 @@ export default function LoginScreen() {
   }
 
   return (
-    <Screen>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-center gap-8">
+    <Screen scroll={false}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.content}
+        enableOnAndroid
+        extraScrollHeight={24}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={styles.scroll}
+      >
         <View className="items-center gap-2">
-          <Image className="h-24 w-24 rounded-2xl" source={require('../../assets/vital control dark logo.jpeg')} />
+          <Image className="h-24 w-24 rounded-2xl" source={logo} />
           <Text className="text-2xl font-bold text-vc-text-dark">Bem-vindo de volta</Text>
           <Text className="text-center text-sm text-vc-text-muted-dark">Acompanhe sua rotina de cuidado com tranquilidade.</Text>
         </View>
@@ -97,7 +110,18 @@ export default function LoginScreen() {
         <Text className="text-center text-vc-text-muted-dark">
           Ainda não possui conta? <Link className="font-bold text-vc-secondary-dark" href="/(auth)/register">Criar conta</Link>
         </Text>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    gap: 32,
+    justifyContent: 'center',
+  },
+  scroll: {
+    flex: 1,
+  },
+});

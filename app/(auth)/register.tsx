@@ -2,7 +2,8 @@ import { Link, useRouter } from 'expo-router';
 import { HeartPulse, ShieldCheck, Stethoscope, UsersRound, type LucideIcon } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { Button } from '../../src/components/ui/Button';
 import { Input } from '../../src/components/ui/Input';
 import { Screen } from '../../src/components/ui/Screen';
@@ -19,6 +20,9 @@ const roles: Array<{ value: UserRole; label: string; description: string; icon: 
   { value: 'RESPONSIBLE', label: 'Responsável', description: 'Acompanhar familiares', icon: UsersRound },
 ];
 
+const darkLogo = require('../../assets/vital control dark logo.jpeg');
+const lightLogo = require('../../assets/vital control ligth logo.jpeg');
+
 interface RegisterFormValues extends Omit<RegisterPayload, 'name'> {
   firstName: string;
   lastName: string;
@@ -27,8 +31,10 @@ interface RegisterFormValues extends Omit<RegisterPayload, 'name'> {
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
   const { register } = useAuth();
   const [apiError, setApiError] = useState<string>();
+  const logo = colorScheme === 'dark' ? darkLogo : lightLogo;
 
   const lastNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
@@ -64,10 +70,16 @@ export default function RegisterScreen() {
 
   return (
     <Screen scroll={false}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView contentContainerClassName="flex-grow justify-center gap-5 pb-6" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.content}
+        enableOnAndroid
+        extraScrollHeight={32}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={styles.scroll}
+      >
           <View className="items-center gap-3">
-            <Image className="h-16 w-16 rounded-2xl" source={require('../../assets/vital control dark logo.jpeg')} />
+            <Image className="h-16 w-16 rounded-2xl" source={logo} />
             <View className="gap-1.5">
               <Text className="text-center text-2xl font-bold text-vc-text-dark">Criar conta</Text>
               <Text className="text-center text-sm leading-5 text-vc-text-muted-dark">Informe seus dados para entrar no Vital Control.</Text>
@@ -250,8 +262,19 @@ export default function RegisterScreen() {
           <Text className="text-center text-vc-text-muted-dark mt-2">
             Já possui conta? <Link className="font-bold text-vc-secondary-dark" href="/(auth)/login">Entrar</Link>
           </Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    gap: 20,
+    justifyContent: 'center',
+    paddingBottom: 12,
+  },
+  scroll: {
+    flex: 1,
+  },
+});
