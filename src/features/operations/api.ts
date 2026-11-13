@@ -3,18 +3,27 @@ import { patientApi } from '../patient/api';
 import type { ApiHomeVisit } from '../patient/api-types';
 import type { AssignVisitPayload, CareGroup, CreateCareGroupPayload, EligibleUser, OperationalHomeVisit, UpdateCareGroupMembersPayload, UpdateVisitStatusPayload, VisitAdministration, VisitMedicationOption } from './api-types';
 import { mockAdministrationsByPatient, mockEligibleUsers, mockGroups, mockMedicationsByPatient, mockVisits, removeMockGroup, updateMockVisit, upsertMockGroup } from './mock-data';
+import { registerPatientInitials, registerPatientInitialsMap } from './ui';
 
 function shouldUseMock(error: unknown) {
   return error instanceof ApiError && error.status === 0;
 }
 
-function normalizeVisit(visit: ApiHomeVisit): OperationalHomeVisit {
-  return { patientId: 'paciente-vinculado', ...visit };
+function normalizeVisit(visit: ApiHomeVisit & { patientId?: string; patientInitials?: string }): OperationalHomeVisit {
+  const normalized: OperationalHomeVisit = { patientId: 'paciente-vinculado', ...visit };
+  if (normalized.patientId && normalized.patientInitials) {
+    registerPatientInitials(normalized.patientId, normalized.patientInitials);
+  }
+  return normalized;
 }
 
 function normalizeEligibleUser(user: EligibleUser & { _id?: string; userId?: string }): EligibleUser {
+  const id = toIdString(user.id ?? user._id ?? user.userId);
+  if (id && user.name && user.role === 'PATIENT') {
+    registerPatientInitials(id, user.name);
+  }
   return {
-    id: toIdString(user.id ?? user._id ?? user.userId),
+    id,
     name: user.name,
     email: user.email,
     role: user.role,
@@ -22,6 +31,9 @@ function normalizeEligibleUser(user: EligibleUser & { _id?: string; userId?: str
 }
 
 function normalizeCareGroup(group: CareGroup & { id?: string }): CareGroup {
+  if (group.patientInitialsMap) {
+    registerPatientInitialsMap(group.patientInitialsMap);
+  }
   return {
     ...group,
     _id: toIdString(group.id ?? group._id),

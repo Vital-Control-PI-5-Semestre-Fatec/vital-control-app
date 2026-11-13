@@ -37,12 +37,71 @@
     "react-native-web": "^0.21.0",
     "react-native-worklets": "0.7.4",
     "tailwindcss": "^3.4.19",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
     "babel-preset-expo": "^55.0.18",
     "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "@babel/core": "^7.29.13",
+    "@expo/cli": {
+      "glob": "^14.0.3"
+    },
+    "@expo/config": {
+      "glob": "^14.0.3"
+    },
+    "@expo/config-plugins": {
+      "glob": "^14.0.3"
+    },
+    "@expo/fingerprint": {
+      "glob": "^14.0.3",
+      "minimatch": "^11.0.4"
+    },
+    "@expo/metro-config": {
+      "glob": "^14.0.3"
+    },
+    "@react-native/codegen": {
+      "glob": "^7.2.3"
+    },
+    "react-native": {
+      "glob": "^7.2.3"
+    },
+    "rimraf": {
+      "glob": "^7.2.3"
+    },
+    "test-exclude": {
+      "glob": "^7.2.3"
+    },
+    "@xmldom/xmldom": "^0.8.15",
+    "plist": {
+      "@xmldom/xmldom": "^0.9.12"
+    },
+    "baseline-browser-mapping": "^2.11.35",
+    "browserslist": "^4.29.5",
+    "compression": "^1.8.2",
+    "decode-uri-component": "^0.5.1",
+    "deepmerge": "4.1.2",
+    "image-size": "^1.2.1",
+    "js-yaml": "^3.15.2",
+    "@expo/xcpretty": {
+      "js-yaml": "^4.3.2"
+    },
+    "minimatch@^3.0.0": {
+      "brace-expansion": "^1.1.21"
+    },
+    "minimatch@^11.0.0": {
+      "brace-expansion": "^5.0.12"
+    },
+    "nanoid": "^3.3.20",
+    "node-forge": "^1.4.3",
+    "postcss": "^8.5.32",
+    "postcss-selector-parser": "^6.1.5",
+    "shell-quote": "^1.12.0",
+    "source-map-js": "^1.2.2",
+    "uuid": "^11.1.1",
+    "zod": "^4.6.7"
   },
   "private": true
 }

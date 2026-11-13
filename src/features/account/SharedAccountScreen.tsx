@@ -67,13 +67,18 @@ export function SharedAccountScreen() {
   }
 
   async function saveProfile() {
+    setError(undefined);
     if (!name.trim() || !email.trim()) {
       setError('Preencha nome e e-mail.');
       return;
     }
 
-    await updateUser({ name: name.trim(), email: email.trim() });
-    setModalOpen(false);
+    try {
+      await updateUser({ name: name.trim(), email: email.trim() });
+      setModalOpen(false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível atualizar o perfil.');
+    }
   }
 
   function openPasswordModal() {

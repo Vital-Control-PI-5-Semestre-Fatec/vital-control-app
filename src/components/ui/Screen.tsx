@@ -41,7 +41,7 @@ export function Screen({ title, subtitle, action, scroll = true, children }: Scr
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-vc-bg-dark">
+    <SafeAreaView className="flex-1 bg-vc-bg-dark" edges={['top', 'left', 'right']}>
       {scroll ? (
         <ScrollView
           contentContainerClassName="flex-grow"

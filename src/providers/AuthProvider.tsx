@@ -96,6 +96,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   async function updateUser(payload: Pick<AuthSession['user'], 'name' | 'email'>) {
     if (!session) return;
+    if (session.accessToken !== 'demo-token') {
+      const updated = await apiRequest<Pick<AuthSession['user'], 'name' | 'email'>>(
+        `/users/${session.user.id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        },
+        session.accessToken,
+      );
+      await applySession({
+        ...session,
+        user: { ...session.user, name: updated.name, email: updated.email },
+      });
+      return;
+    }
     await applySession({ ...session, user: { ...session.user, ...payload } });
   }
 

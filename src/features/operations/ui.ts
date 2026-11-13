@@ -74,11 +74,44 @@ export function buildCenteredDateFilters(centerDate: Date, radius = 2) {
   });
 }
 
-export function patientInitials(patientId?: string) {
-  if (!patientId) return 'S/P';
-  const source = patientId.replace(/^patient-/, '').replace(/^demo-/, '');
-  const parts = source.split(/[-_\s.]+/).filter(Boolean);
+const IGNORED_NAME_PARTICLES = new Set(['da', 'de', 'di', 'do', 'das', 'dos', 'e']);
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const patientInitialsRegistry = new Map<string, string>();
+
+export function formatNameInitials(fullName?: string): string {
+  if (!fullName || !fullName.trim()) return 'S/P';
+  const trimmed = fullName.trim();
+  if (/^([A-ZÀ-Ú]\.)+$/.test(trimmed)) return trimmed;
+  const parts = trimmed
+    .split(/[-_\s.]+/)
+    .filter((part) => part.length > 0 && !IGNORED_NAME_PARTICLES.has(part.toLowerCase()));
   if (!parts.length) return 'P.';
-  if (parts.length === 1) return `${parts[0].slice(0, 1).toUpperCase()}.`;
-  return `${parts[0].slice(0, 1)}.${parts[1].slice(0, 1)}.`.toUpperCase();
+  return `${parts.map((part) => part.slice(0, 1).toUpperCase()).join('.')}.`;
+}
+
+export function registerPatientInitials(patientId?: string, initialsOrName?: string) {
+  if (!patientId || !initialsOrName) return;
+  const formatted = formatNameInitials(initialsOrName);
+  if (formatted && formatted !== 'S/P') {
+    patientInitialsRegistry.set(patientId, formatted);
+  }
+}
+
+export function registerPatientInitialsMap(map?: Record<string, string>) {
+  if (!map) return;
+  for (const [id, initials] of Object.entries(map)) {
+    registerPatientInitials(id, initials);
+  }
+}
+
+export function patientInitials(patientId?: string, explicitInitials?: unknown) {
+  if (typeof explicitInitials === 'string' && explicitInitials.trim()) {
+    return formatNameInitials(explicitInitials);
+  }
+  if (!patientId) return 'S/P';
+  const cached = patientInitialsRegistry.get(patientId);
+  if (cached) return cached;
+  if (UUID_REGEX.test(patientId.trim())) return 'P.';
+  const source = patientId.replace(/^patient-/, '').replace(/^demo-/, '');
+  return formatNameInitials(source);
 }

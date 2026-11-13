@@ -120,7 +120,7 @@ export default function ResponsibleHomeScreen() {
         )}
 
         <View className="flex-row flex-wrap gap-2">
-          {careGroupsQuery.data?.flatMap(g => g.patientIds).map((pId) => {
+          {[...new Set(careGroupsQuery.data?.flatMap((g) => g.patientIds) ?? [])].map((pId) => {
             const isSelected = targetPatientId === pId;
             return (
               <Pressable

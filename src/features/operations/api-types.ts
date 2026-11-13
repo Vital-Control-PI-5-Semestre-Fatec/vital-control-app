@@ -4,6 +4,7 @@ export type HomeVisitStatus = ApiHomeVisit['status'];
 
 export interface OperationalHomeVisit extends ApiHomeVisit {
   patientId: string;
+  patientInitials?: string;
   careGroupId?: string;
   managerId?: string;
   assignedCaregiverId?: string;
@@ -15,6 +16,7 @@ export interface CareGroup {
   id?: string;
   name: string;
   patientIds: string[];
+  patientInitialsMap?: Record<string, string>;
   managerId: string;
   caregiverIds: string[];
   responsibleIds: string[];

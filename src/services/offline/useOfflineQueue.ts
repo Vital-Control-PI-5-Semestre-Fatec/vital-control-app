@@ -1,5 +1,5 @@
-import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { getQueue, removeFromQueue, incrementRetry, type QueuedAction } from './queue';
 
 const MAX_RETRIES = 3;
@@ -40,14 +40,15 @@ export function useOfflineQueue(
 
   useEffect(() => {
     void refreshCount();
+    void processQueue();
 
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected) {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
         void processQueue();
       }
     });
 
-    return () => unsubscribe();
+    return () => subscription.remove();
   }, []);
 
   return { pendingCount, syncing, refreshCount };
