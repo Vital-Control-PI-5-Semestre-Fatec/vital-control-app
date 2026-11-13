@@ -9,6 +9,7 @@ import { ListFilters } from '../../components/ui/ListFilters';
 import { ModalSheet } from '../../components/ui/ModalSheet';
 import { Screen } from '../../components/ui/Screen';
 import { useNotificationDevices } from '../patient/hooks';
+import { LgpdPrivacyCard } from '../lgpd/LgpdPrivacyCard';
 import { useAuth } from '../../providers/AuthProvider';
 import { colors } from '../../theme/colors';
 import type { UserRole } from '../../types/auth';
@@ -144,6 +145,8 @@ export function SharedAccountScreen() {
         <Button label="Editar perfil" onPress={openEdit} variant="ghost" />
         <Button label="Trocar senha" onPress={openPasswordModal} variant="ghost" />
       </Card>
+
+      <LgpdPrivacyCard />
 
       <Card className="gap-3">
         <View className="flex-row items-center gap-3">
