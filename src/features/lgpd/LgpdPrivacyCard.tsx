@@ -1,6 +1,14 @@
-import { CheckCircle2, Download, FileText, Info, ShieldCheck, XCircle } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Info,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, ScrollView, Text, View } from 'react-native';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -11,6 +19,7 @@ import {
   exportMyData,
   fetchMyConsents,
   fetchPrivacyPolicy,
+  getExportDownloadUrl,
   recordConsent,
   submitDataRequest,
 } from './api';
@@ -107,6 +116,22 @@ export function LgpdPrivacyCard() {
       // Erro
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDownload(format: 'pdf' | 'csv') {
+    if (!token) return;
+    try {
+      const url = getExportDownloadUrl(token, format);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.open(url, '_blank');
+        }
+      } else {
+        await Linking.openURL(url);
+      }
+    } catch {
+      // Falha ao abrir link
     }
   }
 
@@ -228,23 +253,68 @@ export function LgpdPrivacyCard() {
         </View>
       </ModalSheet>
 
-      {/* Modal 3: Exportar Meus Dados (RF02) */}
-      <ModalSheet onClose={() => setExportModalOpen(false)} title="Exportação de Dados (Art. 18)" visible={exportModalOpen}>
+      {/* Modal 3: Exportar Meus Dados (Art. 18 LGPD) */}
+      <ModalSheet
+        onClose={() => setExportModalOpen(false)}
+        title="Exportar Dados (Art. 18 LGPD)"
+        visible={exportModalOpen}
+      >
         {loading && !exportedData ? (
           <ActivityIndicator color={colors.primary} size="large" />
         ) : (
-          <ScrollView className="max-h-[60vh] gap-2">
+          <ScrollView className="max-h-[70vh] gap-3">
             <View className="flex-row items-center gap-2">
               <Download color={colors.secondary} size={18} />
-              <Text className="text-xs font-bold text-vc-text-dark">Dossiê Completo de Titular Gerado</Text>
+              <Text className="text-xs font-bold text-vc-text-dark">Escolha o formato da sua exportação</Text>
             </View>
-            <Text className="text-[11px] text-vc-text-muted-dark">
-              Seus dados foram reunidos de forma estruturada para garantir seu direito de portabilidade e acesso (Art. 18, II e V da LGPD).
+            <Text className="text-[11px] text-vc-text-muted-dark leading-4">
+              Em conformidade com os Artigos 18 e 19 da LGPD, você pode baixar seu relatório completo para leitura pessoal ou portabilidade entre sistemas.
             </Text>
-            <View className="rounded-lg bg-black/40 p-3 border border-vc-border-dark">
-              <Text className="font-mono text-[10px] text-green-400">
-                {JSON.stringify(exportedData, null, 2)}
+
+            {/* Opção 1: Dossiê em PDF */}
+            <View className="rounded-xl border border-vc-border-dark p-3.5 bg-vc-surface-dark gap-2">
+              <View className="flex-row items-center gap-2.5">
+                <View className="rounded-lg bg-sky-500/10 p-2">
+                  <FileText color="#0284c7" size={20} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-xs font-bold text-vc-text-dark">Dossiê Completo em PDF (Recomendado)</Text>
+                  <Text className="text-[10px] text-vc-text-muted-dark">
+                    Documento oficial para leitura, impressão e consulta médica
+                  </Text>
+                </View>
+              </View>
+              <Text className="text-[11px] text-vc-text-muted-dark leading-4">
+                Estrutura oficial com seus dados cadastrais, prontuário, medicamentos ativos, rotinas e histórico de consentimentos.
               </Text>
+              <Button
+                label="Baixar Dossiê em PDF"
+                onPress={() => handleDownload('pdf')}
+                variant="primary"
+              />
+            </View>
+
+            {/* Opção 2: Planilha Estruturada em CSV */}
+            <View className="rounded-xl border border-vc-border-dark p-3.5 bg-vc-surface-dark gap-2">
+              <View className="flex-row items-center gap-2.5">
+                <View className="rounded-lg bg-emerald-500/10 p-2">
+                  <FileSpreadsheet color="#059669" size={20} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-xs font-bold text-vc-text-dark">Planilha Estruturada em CSV</Text>
+                  <Text className="text-[10px] text-vc-text-muted-dark">
+                    Interoperabilidade com Excel, Google Planilhas e outros softwares
+                  </Text>
+                </View>
+              </View>
+              <Text className="text-[11px] text-vc-text-muted-dark leading-4">
+                Atende ao direito de portabilidade de dados (Art. 18, V) em formato tabular com codificação UTF-8.
+              </Text>
+              <Button
+                label="Baixar Planilha em CSV"
+                onPress={() => handleDownload('csv')}
+                variant="secondary"
+              />
             </View>
           </ScrollView>
         )}

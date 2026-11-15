@@ -27,6 +27,11 @@ function getApiCandidates() {
   return [...new Set(candidates.map(normalizeApiUrl))];
 }
 
+export function getApiBaseUrl(): string {
+  const candidates = getApiCandidates();
+  return candidates[0] ?? `http://localhost:${API_PORT}${API_PATH}`;
+}
+
 async function fetchWithTimeout(url: string, options: RequestInit) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

@@ -1,4 +1,4 @@
-import { apiRequest } from '../../services/api/client';
+import { apiRequest, getApiBaseUrl } from '../../services/api/client';
 import { LgpdDataRequest, PrivacyPolicyDoc, UserConsent } from './types';
 
 export async function fetchPrivacyPolicy(): Promise<PrivacyPolicyDoc> {
@@ -43,4 +43,9 @@ export async function fetchMyDataRequests(token: string): Promise<LgpdDataReques
 
 export async function exportMyData(token: string): Promise<Record<string, unknown>> {
   return apiRequest<Record<string, unknown>>('/lgpd/export-my-data', {}, token);
+}
+
+export function getExportDownloadUrl(token: string, format: 'pdf' | 'csv'): string {
+  const base = getApiBaseUrl();
+  return `${base}/lgpd/export-my-data/${format}?token=${encodeURIComponent(token)}`;
 }
