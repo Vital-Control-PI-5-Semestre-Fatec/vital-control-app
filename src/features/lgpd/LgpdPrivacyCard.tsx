@@ -51,6 +51,8 @@ export function LgpdPrivacyCard() {
   const [consents, setConsents] = useState<UserConsent[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportedData, setExportedData] = useState<Record<string, unknown> | null>(null);
+  const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'csv' | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Form de solicitação
   const [requestType, setRequestType] = useState<'CORRECTION' | 'DELETION'>('CORRECTION');
@@ -121,17 +123,34 @@ export function LgpdPrivacyCard() {
 
   async function handleDownload(format: 'pdf' | 'csv') {
     if (!token) return;
+    setDownloadingFormat(format);
+    setDownloadError(null);
     try {
       const url = getExportDownloadUrl(token, format);
-      if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined') {
-          window.open(url, '_blank');
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Servidor respondeu com código ${res.status}`);
         }
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download =
+          format === 'pdf' ? 'vital-control-dossie-titular.pdf' : 'vital-control-dados-titular.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
       } else {
         await Linking.openURL(url);
       }
     } catch {
-      // Falha ao abrir link
+      setDownloadError(
+        'Não foi possível conectar ao servidor. Certifique-se de que o backend NestJS está em execução na porta 3000.',
+      );
+    } finally {
+      setDownloadingFormat(null);
     }
   }
 
@@ -271,6 +290,12 @@ export function LgpdPrivacyCard() {
               Em conformidade com os Artigos 18 e 19 da LGPD, você pode baixar seu relatório completo para leitura pessoal ou portabilidade entre sistemas.
             </Text>
 
+            {downloadError && (
+              <View className="rounded-xl border border-red-500/30 bg-red-500/10 p-3">
+                <Text className="text-xs text-red-400 font-medium">{downloadError}</Text>
+              </View>
+            )}
+
             {/* Opção 1: Dossiê em PDF */}
             <View className="rounded-xl border border-vc-border-dark p-3.5 bg-vc-surface-dark gap-2">
               <View className="flex-row items-center gap-2.5">
@@ -288,7 +313,7 @@ export function LgpdPrivacyCard() {
                 Estrutura oficial com seus dados cadastrais, prontuário, medicamentos ativos, rotinas e histórico de consentimentos.
               </Text>
               <Button
-                label="Baixar Dossiê em PDF"
+                label={downloadingFormat === 'pdf' ? 'Gerando Dossiê PDF...' : 'Baixar Dossiê em PDF'}
                 onPress={() => handleDownload('pdf')}
                 variant="primary"
               />
@@ -311,7 +336,7 @@ export function LgpdPrivacyCard() {
                 Atende ao direito de portabilidade de dados (Art. 18, V) em formato tabular com codificação UTF-8.
               </Text>
               <Button
-                label="Baixar Planilha em CSV"
+                label={downloadingFormat === 'csv' ? 'Gerando Planilha CSV...' : 'Baixar Planilha em CSV'}
                 onPress={() => handleDownload('csv')}
                 variant="secondary"
               />

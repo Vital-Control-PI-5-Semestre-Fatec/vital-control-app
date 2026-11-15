@@ -16,9 +16,18 @@ function getExpoHostApiUrl() {
   return host ? `http://${host}:${API_PORT}${API_PATH}` : undefined;
 }
 
+let cachedWorkingApiUrl: string | null = null;
+
 function getApiCandidates() {
+  const webHost =
+    Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname
+      ? `http://${window.location.hostname}:${API_PORT}${API_PATH}`
+      : undefined;
+
   const candidates = [
+    cachedWorkingApiUrl,
     CONFIGURED_API_URL,
+    webHost,
     getExpoHostApiUrl(),
     Platform.OS === 'android' ? `http://10.0.2.2:${API_PORT}${API_PATH}` : undefined,
     `http://localhost:${API_PORT}${API_PATH}`,
@@ -28,6 +37,7 @@ function getApiCandidates() {
 }
 
 export function getApiBaseUrl(): string {
+  if (cachedWorkingApiUrl) return cachedWorkingApiUrl;
   const candidates = getApiCandidates();
   return candidates[0] ?? `http://localhost:${API_PORT}${API_PATH}`;
 }
@@ -75,6 +85,7 @@ export async function apiRequest<T>(
     try {
       response = await fetchWithTimeout(`${apiUrl}${path}`, requestOptions);
       failedApiUrl = apiUrl;
+      cachedWorkingApiUrl = apiUrl;
       break;
     } catch {
       failedApiUrl = apiUrl;
