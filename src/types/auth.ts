@@ -20,6 +20,9 @@ export interface LoginPayload {
 export interface RegisterPayload extends LoginPayload {
   name: string;
   role: UserRole;
+  acceptedTerms: boolean;
+  termsVersion?: string;
+  profileConsents?: string[];
 }
 
 export interface ChangePasswordPayload {
