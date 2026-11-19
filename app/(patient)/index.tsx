@@ -15,7 +15,12 @@ import { useAuth } from '../../src/providers/AuthProvider';
 import { colors } from '../../src/theme/colors';
 import { matchesFilterSearch } from '../../src/utils/list-filters';
 
-function dateKey(date: Date) { return date.toISOString().slice(0, 10); }
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 const statusLabel: Record<AdministrationStatus, string> = {
   PENDING: 'Pendente',

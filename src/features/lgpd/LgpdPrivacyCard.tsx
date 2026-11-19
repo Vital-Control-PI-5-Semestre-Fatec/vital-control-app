@@ -18,12 +18,13 @@ import { colors } from '../../theme/colors';
 import {
   exportMyData,
   fetchMyConsents,
+  fetchMyDataRequests,
   fetchPrivacyPolicy,
   getExportDownloadUrl,
   recordConsent,
   submitDataRequest,
 } from './api';
-import type { PrivacyPolicyDoc, UserConsent } from './types';
+import type { LgpdDataRequest, PrivacyPolicyDoc, UserConsent } from './types';
 
 const DEFAULT_PURPOSES = [
   {
@@ -69,6 +70,7 @@ export function LgpdPrivacyCard() {
 
   const [policy, setPolicy] = useState<PrivacyPolicyDoc | null>(null);
   const [consents, setConsents] = useState<UserConsent[]>([]);
+  const [myRequests, setMyRequests] = useState<LgpdDataRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportedData, setExportedData] = useState<Record<string, unknown> | null>(null);
   const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'csv' | null>(null);
@@ -84,6 +86,7 @@ export function LgpdPrivacyCard() {
   useEffect(() => {
     if (token) {
       void loadConsents();
+      void loadRequests();
     }
   }, [token]);
 
@@ -92,6 +95,16 @@ export function LgpdPrivacyCard() {
     try {
       const data = await fetchMyConsents(token);
       setConsents(data);
+    } catch {
+      // Falha silenciosa
+    }
+  }
+
+  async function loadRequests() {
+    if (!token) return;
+    try {
+      const data = await fetchMyDataRequests(token);
+      setMyRequests(data);
     } catch {
       // Falha silenciosa
     }
@@ -197,6 +210,7 @@ export function LgpdPrivacyCard() {
       });
       setRequestSuccess(true);
       setRequestDetails('');
+      void loadRequests();
     } catch (err) {
       setRequestError(err instanceof Error ? err.message : 'Erro ao enviar solicitação.');
     } finally {
@@ -271,7 +285,7 @@ export function LgpdPrivacyCard() {
 
           {DEFAULT_PURPOSES.map((p) => {
             const consentItem = consents.find((c) => c.purpose === p.key);
-            const isConsented = consentItem ? consentItem.consented : true;
+            const isConsented = consentItem ? consentItem.consented : false;
 
             return (
               <View className="rounded-xl border border-vc-border-dark p-3 gap-2 bg-vc-surface-dark" key={p.key}>
@@ -284,7 +298,7 @@ export function LgpdPrivacyCard() {
                       <XCircle color={colors.danger} size={15} />
                     )}
                     <Text className={`text-[11px] font-semibold ${isConsented ? 'text-vc-secondary-dark' : 'text-vc-danger-dark'}`}>
-                      {isConsented ? 'Autorizado' : 'Revogado'}
+                      {consentItem ? (isConsented ? 'Autorizado' : 'Revogado') : 'Não concedido'}
                     </Text>
                   </View>
                 </View>
@@ -442,6 +456,24 @@ export function LgpdPrivacyCard() {
             </Text>
           )}
           {requestError && <Text className="text-xs text-vc-danger-dark">{requestError}</Text>}
+
+          {myRequests.length > 0 && (
+            <View className="mt-3 gap-2 border-t border-vc-border-dark pt-3">
+              <Text className="text-xs font-bold text-vc-text-dark">Minhas Solicitações Anteriores:</Text>
+              {myRequests.map((req) => (
+                <View className="rounded-lg bg-vc-surface-dark p-2 border border-vc-border-dark" key={req.id}>
+                  <View className="flex-row justify-between">
+                    <Text className="text-[11px] font-bold text-vc-text-dark">{req.requestType}</Text>
+                    <Text className="text-[10px] text-vc-secondary-dark font-semibold">{req.status}</Text>
+                  </View>
+                  {req.details && <Text className="text-[10px] text-vc-text-muted-dark mt-0.5">{req.details}</Text>}
+                  {req.responseNotes && (
+                    <Text className="text-[10px] text-vc-primary-dark mt-1">Resposta DPO: {req.responseNotes}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </ModalSheet>
     </Card>
